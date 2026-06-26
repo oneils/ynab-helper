@@ -1,133 +1,101 @@
 {{define "bank-transactions"}}
 
-<section id="transactions" class="transactions-section">
-    <div class="section-header">
-        <h3>DRAFT Transactions</h3>
-        {{if .Txns}}
-        <span class="transaction-count">{{len .Txns}} transaction(s)</span>
-        {{end}}
-    </div>
+{{template "status-tabs" .}}
 
-    {{if .Txns}}
-    <!-- Bulk actions toolbar -->
-    <div class="bulk-actions-toolbar" style="display: none;">
-        <span class="selection-count">0 selected</span>
-        <div class="bulk-action-buttons">
-            <button type="button" class="bulk-action-btn bulk-skip-btn" disabled>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-                Skip Selected
-            </button>
-            <button type="button" class="bulk-action-btn" disabled>Save All</button>
-            <button type="button" class="bulk-action-btn" disabled>Set Category</button>
-            <button type="button" class="bulk-action-btn" disabled>Set Payee</button>
-        </div>
-    </div>
-
-    <figure>
-        <table role="grid" class="transactions-table" data-account-id="{{if .Txns}}{{(index .Txns 0).Account.ID}}{{end}}">
-            <thead>
-                <tr>
-                    <th scope="col">
-                        <input
-                            type="checkbox"
-                            id="select-all"
-                            aria-label="Select all transactions"
-                        />
-                    </th>
-                    <th scope="col">#</th>
-                    <th scope="col">Payee</th>
-                    <th scope="col">Amount</th>
-                    <th scope="col">Currency</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">Account</th>
-                    <th scope="col">Category</th>
-                    <th scope="col">Memo</th>
-                    <th scope="col">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range $index, $txn := .Txns}}
-                <tr id="txn-row-{{$txn.ID}}" class="txn-row txn-row-view" data-txn-id="{{$txn.ID}}">
-                    <td>
-                        <input
-                            type="checkbox"
-                            class="txn-checkbox"
-                            data-txn-id="{{$txn.ID}}"
-                            aria-label="Select transaction"
-                        />
-                    </td>
-                    <td><small>{{$index}}</small></td>
-                    <td><small>{{$txn.Payee}}</small></td>
-                    <td><small>{{$txn.Amount}}</small></td>
-                    <td><small>{{$txn.Currency}}</small></td>
-                    <td><small>{{$txn.TxnTime.Format "2006-01-02"}}</small></td>
-                    <td><small>{{$txn.Account.Name}}</small></td>
-                    <td>
-                        <small>
-                            <span class="status-badge status-{{$txn.Status}}">{{$txn.Status}}</span>
-                        </small>
-                    </td>
-                    <td title="{{$txn.Description}}"><small>{{$txn.Description}}</small></td>
-                    <td class="txn-actions">
-                        <button
-                            type="button"
-                            class="action-link"
-                            hx-get="/bank-txns/{{$txn.ID}}/edit-inline?accId={{$txn.Account.ID}}"
-                            hx-target="#txn-row-{{$txn.ID}}"
-                            hx-swap="outerHTML"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                            Edit
-                        </button>
-                        <button
-                            type="button"
-                            class="action-link action-skip"
-                            hx-post="/bank-txns/{{$txn.ID}}/skip?accId={{$txn.Account.ID}}"
-                            hx-target="#transactions"
-                            hx-swap="outerHTML"
-                            hx-confirm="Skip this transaction?"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                            Skip
-                        </button>
-                    </td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-    </figure>
-    {{else}}
-    <div class="empty-state">
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="64"
-            height="64"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-        >
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-        </svg>
-        <h3>No DRAFT Transactions found</h3>
-        <p>Select appropriate Budget and Account and/or upload bank report</p>
-    </div>
-    {{end}}
-</section>
+{{if .Txns}}
+<figure>
+    <table role="grid" class="transactions-table">
+        <thead>
+            <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Description</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Payee</th>
+                <th scope="col">Category</th>
+                <th scope="col">Status</th>
+                <th scope="col"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $row := .Txns}}
+            <tr id="txn-row-{{$row.Txn.ID}}"
+                class="txn-row"
+                data-txn-id="{{$row.Txn.ID}}"
+                hx-get="/bank-txns/{{$row.Txn.ID}}/detail?account={{$row.Txn.Account.ID}}"
+                hx-target="#txn-detail-panel"
+                hx-swap="innerHTML"
+                hx-on::after-request="document.querySelectorAll('.txn-row--selected').forEach(function(el){el.classList.remove('txn-row--selected')}); this.classList.add('txn-row--selected'); document.getElementById('txn-detail-panel').classList.add('txn-detail-panel--open')"
+            >
+                <td><small>{{$row.Txn.TxnTime.Format "2006-01-02"}}</small></td>
+                <td title="{{$row.Txn.Description}}"><small>{{$row.Txn.Description}}</small></td>
+                <td><small>{{$row.Txn.Amount}}</small></td>
+                <td>
+                    {{if $row.SugPayee}}
+                    <small>{{$row.SugPayee}}</small>
+                    {{if $row.AutoFilled}}
+                    <span class="auto-filled-badge">auto</span>
+                    {{end}}
+                    {{else}}
+                    <small>{{$row.Txn.Payee}}</small>
+                    {{end}}
+                </td>
+                <td>
+                    {{if $row.SugCategory}}
+                    <small>{{$row.SugCategory}}</small>
+                    {{if $row.AutoFilled}}
+                    <span class="auto-filled-badge">auto</span>
+                    {{end}}
+                    {{else}}
+                    <small class="text-muted">&mdash;</small>
+                    {{end}}
+                </td>
+                <td><span class="status-badge status-{{$row.Txn.Status}}">{{$row.Txn.Status.DisplayName}}</span></td>
+                <td class="txn-actions">
+                    {{if or (eq $row.Txn.Status "DRAFT") (eq $row.Txn.Status "INVALID")}}
+                    <button
+                        type="button"
+                        class="action-link action-skip"
+                        hx-post="/bank-txns/{{$row.Txn.ID}}/skip?accId={{$row.Txn.Account.ID}}&status={{$.ActiveStatus}}"
+                        hx-target="#txn-list-panel"
+                        hx-swap="innerHTML"
+                        hx-confirm="Skip this transaction?"
+                        hx-on::after-request="const panel = document.getElementById('txn-detail-panel'); if(panel) panel.classList.remove('txn-detail-panel--open')"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                        <span>Skip</span>
+                    </button>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</figure>
+{{else}}
+<div class="empty-state">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="64"
+        height="64"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+    >
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+        <polyline points="10 9 9 9 8 9"></polyline>
+    </svg>
+    <h3>No Transactions found</h3>
+    <p>Select a Budget and Account to view transactions</p>
+</div>
+{{end}}
 
 {{end}}

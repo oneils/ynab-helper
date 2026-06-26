@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -61,7 +63,7 @@ func (s *Server) indexHandler(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Budgets []ynab.Budget
 		Accs    []ynab.Account
-		Txns    []txn.Transaction
+		Txns    []TxnListRow
 	}{
 		Budgets: budgets,
 	}
@@ -77,28 +79,71 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		budgets = []ynab.Budget{}
 	}
 
+	activeStatus := r.URL.Query().Get("status")
+	budgetID := r.URL.Query().Get("budget")
+	accountID := r.URL.Query().Get("account")
+
 	data := struct {
 		Budgets        []ynab.Budget
 		Accs           []ynab.Account
-		Txns           []txn.Transaction
+		Txns           []TxnListRow
 		SelectedBudget string
+		Budget         string
+		Account        string
+		ActiveStatus   string
+		StatusCounts   map[string]int
 	}{
-		Budgets: budgets,
+		Budgets:      budgets,
+		ActiveStatus: activeStatus,
+		Budget:       budgetID,
+		Account:      accountID,
 	}
 
-	// If only one budget, auto-select it and load its accounts/transactions
-	if len(budgets) == 1 {
-		data.SelectedBudget = budgets[0].ID
-		data.Accs = budgets[0].Accounts
+	// If only one budget and no explicit selection, auto-select it
+	if len(budgets) == 1 && budgetID == "" {
+		budgetID = budgets[0].ID
+	}
+
+	if budgetID != "" {
+		data.SelectedBudget = budgetID
+		data.Budget = budgetID
+
+		// Find the budget to get its accounts
+		for _, b := range budgets {
+			if b.ID == budgetID {
+				data.Accs = b.Accounts
+				break
+			}
+		}
 
 		// Fetch all transactions for this budget
 		txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
-			BudgetID:  budgets[0].ID,
-			AccountID: "", // All accounts
-			Status:    "", // All statuses
+			BudgetID:  budgetID,
+			AccountID: accountID,
+			Status:    activeStatus,
 		})
 		if err == nil {
-			data.Txns = txns
+			data.Txns = enrichTransactionList(r.Context(), txns,
+				s.Syncer.FindBudgetByAccID,
+				func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+					return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+				},
+				func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+					return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+				},
+			)
+		}
+
+		// Fetch status counts
+		statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accountID)
+		if err != nil {
+			slog.Error("failed to count transactions by status", "error", err)
+		} else {
+			statusCountsStr := make(map[string]int, len(statusCounts))
+			for k, v := range statusCounts {
+				statusCountsStr[string(k)] = v
+			}
+			data.StatusCounts = statusCountsStr
 		}
 	}
 
@@ -138,6 +183,7 @@ func (s *Server) aboutViewHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) accountsHandler(w http.ResponseWriter, r *http.Request) {
 	budgetID := r.URL.Query().Get("budget")
+	accountID := r.URL.Query().Get("account")
 
 	budget, err := s.Syncer.FindBudgetByID(r.Context(), budgetID)
 	if err != nil {
@@ -146,12 +192,22 @@ func (s *Server) accountsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Accs []ynab.Account
+		Accs    []ynab.Account
+		Account string
 	}{
-		Accs: budget.Accounts,
+		Accs:    budget.Accounts,
+		Account: accountID,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "accounts-select", data)
+}
+
+// TxnListRow is a view-model for transaction list rows, enriched with suggestion data.
+type TxnListRow struct {
+	Txn         txn.Transaction
+	SugPayee    string // empty if no match
+	SugCategory string // empty if no match
+	AutoFilled  bool   // true if either field was pre-filled
 }
 
 func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
@@ -169,92 +225,197 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rows := enrichTransactionList(r.Context(), txns,
+		s.Syncer.FindBudgetByAccID,
+		func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+			return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+		},
+		func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+			return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+		},
+	)
+
+	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accountID)
+	if err != nil {
+		slog.Error("failed to count transactions by status", "error", err)
+		statusCounts = make(map[txn.TransactionStatus]int)
+	}
+	statusCountsStr := make(map[string]int, len(statusCounts))
+	for k, v := range statusCounts {
+		statusCountsStr[string(k)] = v
+	}
+
 	data := struct {
-		Txns []txn.Transaction
+		Txns         []TxnListRow
+		Budget       string
+		Account      string
+		ActiveStatus string
+		StatusCounts map[string]int
 	}{
-		Txns: txns,
+		Txns:         rows,
+		Budget:       budgetID,
+		Account:      accountID,
+		ActiveStatus: status,
+		StatusCounts: statusCountsStr,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
 }
 
-func (s *Server) fetchBankTxnHandler(w http.ResponseWriter, r *http.Request) {
+// enrichTransactionList enriches each transaction with payee and category suggestions.
+// Budget lookups are cached per account ID. Suggestion failures are non-fatal.
+func enrichTransactionList(
+	ctx context.Context,
+	txns []txn.Transaction,
+	budgetByAccID func(context.Context, string) (ynab.Budget, error),
+	getSuggestions func(context.Context, string, string) ([]txn.PayeeSuggestion, error),
+	getCategorySuggestions func(context.Context, string, string, string) ([]txn.CategorySuggestion, error),
+) []TxnListRow {
+	rows := make([]TxnListRow, len(txns))
+	budgetCache := make(map[string]ynab.Budget)
+	failedAccounts := make(map[string]bool)
+
+	for i, t := range txns {
+		rows[i].Txn = t
+
+		if failedAccounts[t.Account.ID] {
+			continue
+		}
+
+		budget, ok := budgetCache[t.Account.ID]
+		if !ok {
+			var err error
+			budget, err = budgetByAccID(ctx, t.Account.ID)
+			if err != nil {
+				slog.Warn("failed to find budget for account", "accID", t.Account.ID, "error", err)
+				failedAccounts[t.Account.ID] = true
+				continue
+			}
+			budgetCache[t.Account.ID] = budget
+		}
+
+		payeeSuggestions, err := getSuggestions(ctx, budget.ID, t.Description)
+		var sugPayeeID string
+		if err == nil && len(payeeSuggestions) > 0 {
+			sugPayeeID = payeeSuggestions[0].PayeeID
+			rows[i].SugPayee = payeeSuggestions[0].PayeeName
+			rows[i].AutoFilled = true
+		}
+
+		catSuggestions, err := getCategorySuggestions(ctx, budget.ID, t.Description, sugPayeeID)
+		if err == nil && len(catSuggestions) > 0 {
+			rows[i].SugCategory = catSuggestions[0].CategoryName
+			rows[i].AutoFilled = true
+		}
+	}
+
+	return rows
+}
+
+// wrapTransactions converts a slice of transactions to TxnListRow wrappers without enrichment.
+func wrapTransactions(txns []txn.Transaction) []TxnListRow {
+	rows := make([]TxnListRow, len(txns))
+	for i, t := range txns {
+		rows[i] = TxnListRow{Txn: t}
+	}
+	return rows
+}
+
+func (s *Server) detailBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 	txnID := chi.URLParam(r, "id")
-	accID := r.URL.Query().Get("accId")
+	activeStatus := r.URL.Query().Get("status")
 
 	transaction, err := s.TxnProcessor.FetchByID(r.Context(), txnID)
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		s.render(w, http.StatusNotFound, "error.tmpl.html", errorTmpl, err.Error())
 		return
 	}
 
-	budget, err := s.Syncer.FindBudgetByAccID(r.Context(), accID)
+	budget, err := s.Syncer.FindBudgetByAccID(r.Context(), transaction.Account.ID)
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	budgets, err := s.Syncer.FetchBudgets(r.Context())
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		s.render(w, http.StatusInternalServerError, "error.tmpl.html", errorTmpl, err.Error())
 		return
 	}
 
 	payees, err := s.Syncer.FetchPayeesByBudget(r.Context(), budget.ID)
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		s.render(w, http.StatusInternalServerError, "error.tmpl.html", errorTmpl, err.Error())
 		return
 	}
-
-	suggestedPayee := s.TxnProcessor.SuggestPayee(transaction, payees)
 
 	categories, err := s.Syncer.FetchCategoriesByBudget(r.Context(), budget.ID)
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		s.render(w, http.StatusInternalServerError, "error.tmpl.html", errorTmpl, err.Error())
 		return
+	}
+
+	payeeSugs, err := s.TxnProcessor.GetSmartSuggestions(r.Context(), budget.ID, transaction.Description)
+	if err != nil {
+		slog.Warn("failed to get payee suggestions for detail", "txnID", txnID, "error", err)
+	}
+	var sugPayeeID, sugPayeeName string
+	autoFilled := false
+	if len(payeeSugs) > 0 {
+		sugPayeeID = payeeSugs[0].PayeeID
+		sugPayeeName = payeeSugs[0].PayeeName
+		autoFilled = true
+	}
+
+	catSugs, catErr := s.TxnProcessor.GetCategorySuggestions(r.Context(), budget.ID, transaction.Description, sugPayeeID)
+	if catErr != nil {
+		slog.Warn("failed to get category suggestions for detail", "txnID", txnID, "error", catErr)
+	}
+	var sugCatID, sugCatName string
+	if len(catSugs) > 0 {
+		sugCatID = catSugs[0].CategoryID
+		sugCatName = catSugs[0].CategoryName
+		autoFilled = true
 	}
 
 	data := struct {
-		Txn                 txn.Transaction
-		BudgetID            string
-		Budgets             []ynab.Budget
-		Accs                []ynab.Account
-		AccID               string
-		Payee               []ynab.Payee
-		SuggestedPayeeID    string
-		Categories          []ynab.Category
-		SuggestedCategoryID string
+		Txn             txn.Transaction
+		BudgetID        string
+		Payees          []ynab.Payee
+		Categories      []ynab.Category
+		SugPayeeID      string
+		SugPayeeName    string
+		SugCategoryID   string
+		SugCategoryName string
+		AutoFilled      bool
+		ActiveStatus    string
 	}{
-		Txn:                 transaction,
-		BudgetID:            budget.ID,
-		Budgets:             budgets,
-		Accs:                budget.Accounts,
-		AccID:               accID,
-		Payee:               payees,
-		SuggestedPayeeID:    suggestedPayee.ID,
-		Categories:          categories,
-		SuggestedCategoryID: suggestedPayee.LastCategoryID,
+		Txn:             transaction,
+		BudgetID:        budget.ID,
+		Payees:          payees,
+		Categories:      categories,
+		SugPayeeID:      sugPayeeID,
+		SugPayeeName:    sugPayeeName,
+		SugCategoryID:   sugCatID,
+		SugCategoryName: sugCatName,
+		AutoFilled:      autoFilled,
+		ActiveStatus:    activeStatus,
 	}
 
-	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-txn", data)
+	s.render(w, http.StatusOK, "import-txns.tmpl.html", "txn-detail-panel", data)
 }
 
 func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
 	txnID := chi.URLParam(r, "id")
 	accID := r.URL.Query().Get("accId")
+	activeStatus := r.URL.Query().Get("status")
 
-	if err := s.TxnProcessor.Skip(r.Context(), txnID); err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+	if accID == "" {
+		s.render(w, http.StatusBadRequest, "error.tmpl.html", errorTmpl, "account ID is required")
 		return
 	}
 
 	budget, err := s.Syncer.FindBudgetByAccID(r.Context(), accID)
 	if err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		return
+	}
+
+	if err := s.TxnProcessor.Skip(r.Context(), txnID); err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
 		return
 	}
@@ -268,10 +429,36 @@ func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accID)
+	if err != nil {
+		slog.Error("failed to count transactions by status", "error", err)
+		statusCounts = make(map[txn.TransactionStatus]int)
+	}
+	statusCountsStr := make(map[string]int, len(statusCounts))
+	for k, v := range statusCounts {
+		statusCountsStr[string(k)] = v
+	}
+
 	data := struct {
-		Txns []txn.Transaction
+		Txns         []TxnListRow
+		Budget       string
+		Account      string
+		ActiveStatus string
+		StatusCounts map[string]int
 	}{
-		Txns: txns,
+		Txns: enrichTransactionList(r.Context(), txns,
+			s.Syncer.FindBudgetByAccID,
+			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+				return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+			},
+			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+			},
+		),
+		Budget:       budget.ID,
+		Account:      accID,
+		ActiveStatus: activeStatus,
+		StatusCounts: statusCountsStr,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
@@ -293,6 +480,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 		TxnDate:    r.PostForm.Get("txnDate"),
 		TxnID:      r.PostForm.Get("txnID"),
 	}
+	activeStatus := r.URL.Query().Get("status")
 
 	if err := s.TxnProcessor.SaveToYnab(r.Context(), form); err != nil {
 		slog.Error("error uploading transaction to YNAB", "error", err)
@@ -301,8 +489,44 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := s.Syncer.UpdatePayeeLastCategory(r.Context(), form.PayeeID, form.CategoryID); err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
+		slog.Error("error updating payee last category", "error", err)
+	}
+
+	if form.PayeeID != "" {
+		transaction, fetchErr := s.TxnProcessor.FetchByID(r.Context(), form.TxnID)
+		if fetchErr != nil {
+			slog.Error("error fetching transaction for pattern recording", "error", fetchErr)
+		} else {
+			payees, payeeErr := s.Syncer.FetchPayeesByBudget(r.Context(), form.BudgetID)
+			if payeeErr != nil {
+				slog.Error("error fetching payees for pattern recording", "error", payeeErr)
+			} else {
+				var payeeName string
+				for _, p := range payees {
+					if p.ID == form.PayeeID {
+						payeeName = p.Name
+						break
+					}
+				}
+				var categoryName string
+				if form.CategoryID != "" {
+					categories, catErr := s.Syncer.FetchCategoriesByBudget(r.Context(), form.BudgetID)
+					if catErr != nil {
+						slog.Error("error fetching categories for pattern recording", "error", catErr)
+					} else {
+						for _, c := range categories {
+							if c.ID == form.CategoryID {
+								categoryName = c.Name
+								break
+							}
+						}
+					}
+				}
+				if err := s.TxnProcessor.RecordPattern(r.Context(), form.BudgetID, transaction.Description, form.PayeeID, payeeName, form.CategoryID, categoryName, transaction.TxnTime); err != nil {
+					slog.Error("error recording payee pattern", "error", err)
+				}
+			}
+		}
 	}
 
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
@@ -314,10 +538,36 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), form.AccountID)
+	if err != nil {
+		slog.Error("failed to count transactions by status", "error", err)
+		statusCounts = make(map[txn.TransactionStatus]int)
+	}
+	statusCountsStr := make(map[string]int, len(statusCounts))
+	for k, v := range statusCounts {
+		statusCountsStr[string(k)] = v
+	}
+
 	data := struct {
-		Txns []txn.Transaction
+		Txns         []TxnListRow
+		Budget       string
+		Account      string
+		ActiveStatus string
+		StatusCounts map[string]int
 	}{
-		Txns: txns,
+		Txns: enrichTransactionList(r.Context(), txns,
+			s.Syncer.FindBudgetByAccID,
+			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+				return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+			},
+			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+			},
+		),
+		Budget:       form.BudgetID,
+		Account:      form.AccountID,
+		ActiveStatus: activeStatus,
+		StatusCounts: statusCountsStr,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
@@ -389,6 +639,7 @@ func (s *Server) syncAccountsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("synced accounts", "budget", budget)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) syncCategoriesHandler(w http.ResponseWriter, r *http.Request) {
@@ -504,10 +755,30 @@ func (s *Server) uploadBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	activeStatus := r.URL.Query().Get("status")
+
+	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accID)
+	if err != nil {
+		slog.Error("failed to count transactions by status", "error", err)
+		statusCounts = make(map[txn.TransactionStatus]int)
+	}
+	statusCountsStr := make(map[string]int, len(statusCounts))
+	for k, v := range statusCounts {
+		statusCountsStr[string(k)] = v
+	}
+
 	data := struct {
-		Txns []txn.Transaction
+		Txns         []TxnListRow
+		Budget       string
+		Account      string
+		ActiveStatus string
+		StatusCounts map[string]int
 	}{
-		Txns: txns,
+		Txns:         wrapTransactions(txns),
+		Budget:       budgetID,
+		Account:      accID,
+		ActiveStatus: activeStatus,
+		StatusCounts: statusCountsStr,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
@@ -636,20 +907,9 @@ func (s *Server) confirmBankTxnsHandler(w http.ResponseWriter, r *http.Request) 
 	// Delete temp file
 	_ = s.FileStore.DeleteUpload(fileUUID)
 
-	// Fetch and render transactions (same as uploadBankTxnsHandler)
-	txns, err := s.TxnProcessor.Fetch(r.Context(), params)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	responseData := struct {
-		Txns []txn.Transaction
-	}{
-		Txns: txns,
-	}
-
-	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", responseData)
+	// Redirect to the split-panel Transactions page so the user can review newly imported txns
+	w.Header().Set("HX-Redirect", fmt.Sprintf("/import-bank-txns?budget=%s&account=%s", url.QueryEscape(budgetID), url.QueryEscape(accID)))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) cancelPreviewHandler(w http.ResponseWriter, r *http.Request) {
@@ -668,80 +928,6 @@ func (s *Server) cancelPreviewHandler(w http.ResponseWriter, r *http.Request) {
 
 // Inline editing handlers
 
-func (s *Server) editInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
-	txnID := chi.URLParam(r, "id")
-	accID := r.URL.Query().Get("accId")
-
-	transaction, err := s.TxnProcessor.FetchByID(r.Context(), txnID)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	budget, err := s.Syncer.FindBudgetByAccID(r.Context(), accID)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	payees, err := s.Syncer.FetchPayeesByBudget(r.Context(), budget.ID)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	categories, err := s.Syncer.FetchCategoriesByBudget(r.Context(), budget.ID)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	// Get the transaction's index (not critical, can default to 0)
-	data := struct {
-		Txn        txn.Transaction
-		BudgetID   string
-		Payees     []ynab.Payee
-		Categories []ynab.Category
-		Index      int
-	}{
-		Txn:        transaction,
-		BudgetID:   budget.ID,
-		Payees:     payees,
-		Categories: categories,
-		Index:      0, // Will be visible in UI context
-	}
-
-	s.render(w, http.StatusOK, "transaction-row.tmpl.html", "transaction-row-edit", data)
-}
-
-func (s *Server) viewInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
-	txnID := chi.URLParam(r, "id")
-	accID := r.URL.Query().Get("accId")
-
-	transaction, err := s.TxnProcessor.FetchByID(r.Context(), txnID)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	// Verify account access
-	_, err = s.Syncer.FindBudgetByAccID(r.Context(), accID)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	data := struct {
-		Txn   txn.Transaction
-		Index int
-	}{
-		Txn:   transaction,
-		Index: 0, // Will be visible in UI context
-	}
-
-	s.render(w, http.StatusOK, "transaction-row.tmpl.html", "transaction-row-view", data)
-}
-
 func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -752,20 +938,13 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 
 	form := txn.SaveForm{
 		TxnID:      txnID,
-		BudgetID:   r.PostForm.Get("budget_id"),
-		AccountID:  r.PostForm.Get("account_id"),
-		PayeeID:    r.PostForm.Get("payee_id"),
-		CategoryID: r.PostForm.Get("category_id"),
+		BudgetID:   r.PostForm.Get("budget"),
+		AccountID:  r.PostForm.Get("account"),
+		PayeeID:    r.PostForm.Get("payee"),
+		CategoryID: r.PostForm.Get("category"),
 		Memo:       r.PostForm.Get("memo"),
 		Amount:     r.PostForm.Get("amount"),
-		TxnDate:    r.PostForm.Get("date"),
-	}
-
-	// Save to YNAB
-	if err := s.TxnProcessor.SaveToYnab(r.Context(), form); err != nil {
-		slog.Error("error uploading transaction to YNAB", "error", err)
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
+		TxnDate:    r.PostForm.Get("txnDate"),
 	}
 
 	// Update payee's last category for future suggestions
@@ -785,59 +964,90 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Record pattern for future smart suggestions
 	if form.PayeeID != "" {
-		// Fetch payees and categories to get names
+		// Fetch payees to get the payee name for pattern recording
 		payees, err := s.Syncer.FetchPayeesByBudget(r.Context(), form.BudgetID)
 		if err != nil {
 			slog.Error("error fetching payees for pattern recording", "error", err)
-			return
-		}
-
-		// Look up payee name
-		var payeeName string
-		for _, p := range payees {
-			if p.ID == form.PayeeID {
-				payeeName = p.Name
-				break
-			}
-		}
-
-		// Look up category name if provided
-		var categoryName string
-		if form.CategoryID != "" {
-			categories, err := s.Syncer.FetchCategoriesByBudget(r.Context(), form.BudgetID)
-			if err != nil {
-				slog.Error("error fetching categories for pattern recording", "error", err)
-				return
-			}
-
-			for _, c := range categories {
-				if c.ID == form.CategoryID {
-					categoryName = c.Name
+		} else {
+			// Look up payee name
+			var payeeName string
+			for _, p := range payees {
+				if p.ID == form.PayeeID {
+					payeeName = p.Name
 					break
 				}
 			}
-		}
 
-		// Record the pattern
-		if err := s.TxnProcessor.RecordPattern(r.Context(), form.BudgetID, transaction.Description, form.PayeeID, payeeName, form.CategoryID, categoryName, transaction.TxnTime); err != nil {
-			slog.Error("error recording payee pattern", "error", err)
-			// Don't fail the request, just log the error
+			// Look up category name if provided
+			var categoryName string
+			if form.CategoryID != "" {
+				categories, err := s.Syncer.FetchCategoriesByBudget(r.Context(), form.BudgetID)
+				if err != nil {
+					slog.Error("error fetching categories for pattern recording", "error", err)
+				} else {
+					for _, c := range categories {
+						if c.ID == form.CategoryID {
+							categoryName = c.Name
+							break
+						}
+					}
+				}
+			}
+
+			// Record the pattern
+			if err := s.TxnProcessor.RecordPattern(r.Context(), form.BudgetID, transaction.Description, form.PayeeID, payeeName, form.CategoryID, categoryName, transaction.TxnTime); err != nil {
+				slog.Error("error recording payee pattern", "error", err)
+			}
 		}
 	}
 
-	// Return to view mode
-	data := struct {
-		Txn   txn.Transaction
-		Index int
-	}{
-		Txn:   transaction,
-		Index: 0,
+	// Fetch updated transaction list for the account
+	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
+		BudgetID:  form.BudgetID,
+		AccountID: form.AccountID,
+	})
+	if err != nil {
+		slog.Error("failed to fetch transactions after save", "error", err)
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		return
+	}
+
+	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), form.AccountID)
+	if err != nil {
+		slog.Error("failed to count transactions by status", "error", err)
+		statusCounts = make(map[txn.TransactionStatus]int)
+	}
+	statusCountsStr := make(map[string]int, len(statusCounts))
+	for k, v := range statusCounts {
+		statusCountsStr[string(k)] = v
 	}
 
 	// Add success message header for toast notification
 	w.Header().Set("HX-Trigger", `{"showToast": {"message": "Transaction saved successfully", "type": "success"}}`)
 
-	s.render(w, http.StatusOK, "transaction-row.tmpl.html", "transaction-row-view", data)
+	responseData := struct {
+		Txns         []TxnListRow
+		Budget       string
+		Account      string
+		ActiveStatus string
+		StatusCounts map[string]int
+	}{
+		Txns: enrichTransactionList(r.Context(), txns,
+			s.Syncer.FindBudgetByAccID,
+			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+				return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+			},
+			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+			},
+		),
+		Budget:       form.BudgetID,
+		Account:      form.AccountID,
+		ActiveStatus: r.URL.Query().Get("status"),
+		StatusCounts: statusCountsStr,
+	}
+
+	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", responseData)
 }
 
 // Bulk operations handlers
@@ -878,22 +1088,47 @@ func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch remaining DRAFT transactions
+	// Fetch all transactions for the account
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  budget.ID,
 		AccountID: accID,
-		Status:    "DRAFT",
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
 		return
 	}
 
+	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accID)
+	if err != nil {
+		slog.Error("failed to count transactions by status", "error", err)
+		statusCounts = make(map[txn.TransactionStatus]int)
+	}
+	statusCountsStr := make(map[string]int, len(statusCounts))
+	for k, v := range statusCounts {
+		statusCountsStr[string(k)] = v
+	}
+
 	// Re-render transaction list
 	data := struct {
-		Txns []txn.Transaction
+		Txns         []TxnListRow
+		Budget       string
+		Account      string
+		ActiveStatus string
+		StatusCounts map[string]int
 	}{
-		Txns: txns,
+		Txns: enrichTransactionList(r.Context(), txns,
+			s.Syncer.FindBudgetByAccID,
+			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+				return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+			},
+			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+			},
+		),
+		Budget:       budget.ID,
+		Account:      accID,
+		ActiveStatus: "",
+		StatusCounts: statusCountsStr,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)

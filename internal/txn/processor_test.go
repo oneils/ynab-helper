@@ -15,6 +15,7 @@ type mockTransactionStore struct {
 	fetchByAccountFunc func(ctx context.Context, accID string, status string) ([]Transaction, error)
 	findByIDFunc       func(ctx context.Context, id string) (Transaction, error)
 	updateStatusFunc   func(ctx context.Context, id string, status TransactionStatus) error
+	countByStatusFunc  func(ctx context.Context, accountID string) (map[TransactionStatus]int, error)
 	transactions       []Transaction
 	statusUpdates      map[string]TransactionStatus
 }
@@ -67,6 +68,19 @@ func (m *mockTransactionStore) UpdateTransactionStatus(ctx context.Context, id s
 		}
 	}
 	return nil
+}
+
+func (m *mockTransactionStore) CountByStatus(ctx context.Context, accountID string) (map[TransactionStatus]int, error) {
+	if m.countByStatusFunc != nil {
+		return m.countByStatusFunc(ctx, accountID)
+	}
+	counts := make(map[TransactionStatus]int)
+	for _, t := range m.transactions {
+		if t.Account.ID == accountID {
+			counts[t.Status]++
+		}
+	}
+	return counts, nil
 }
 
 type mockYnabClient struct {
@@ -368,8 +382,6 @@ func TestProcessor_SuggestPayee(t *testing.T) {
 }
 
 func TestProcessor_Normalize(t *testing.T) {
-	processor := NewProcessor(nil, nil, nil, nil, nil)
-
 	tests := []struct {
 		input    string
 		expected string
@@ -398,7 +410,7 @@ func TestProcessor_Normalize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			result := processor.normalize(tt.input)
+			result := normalize(tt.input)
 			if result != tt.expected {
 				t.Errorf("normalize(%q) = %q; expected %q", tt.input, result, tt.expected)
 			}
@@ -425,9 +437,9 @@ func TestProcessor_ParseYnabTime(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name:      "Alternative date format (still valid numerically)",
+			name:      "Alternative date format (DD-MM-YYYY not valid YYYY-MM-DD)",
 			input:     "15-01-2024",
-			expectErr: false, // parseYnabTime only checks if it's numeric after removing hyphens
+			expectErr: true,
 		},
 		{
 			name:      "Invalid characters",

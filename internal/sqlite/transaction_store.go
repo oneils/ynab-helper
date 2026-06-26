@@ -183,7 +183,7 @@ func (s *TransactionStore) FindTransactionByID(ctx context.Context, id string) (
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return txn.Transaction{}, fmt.Errorf("find transaction: %w", err)
+			return txn.Transaction{}, fmt.Errorf("transaction not found: %s", id)
 		}
 		return txn.Transaction{}, fmt.Errorf("find transaction: %w", err)
 	}
@@ -200,6 +200,40 @@ func (s *TransactionStore) FindTransactionByID(ctx context.Context, id string) (
 	}
 
 	return t, nil
+}
+
+// CountByStatus returns the number of transactions per status for a given account.
+// When accountID is empty, counts across all accounts.
+func (s *TransactionStore) CountByStatus(ctx context.Context, accountID string) (map[txn.TransactionStatus]int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	query := `SELECT status, COUNT(*) FROM transactions`
+	args := []interface{}{}
+	if accountID != "" {
+		query += ` WHERE account_id = ?`
+		args = append(args, accountID)
+	}
+	query += ` GROUP BY status`
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("count by status: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	counts := make(map[txn.TransactionStatus]int)
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("scan count row: %w", err)
+		}
+		counts[txn.TransactionStatus(status)] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate count rows: %w", err)
+	}
+	return counts, nil
 }
 
 // UpdateTransactionStatus updates the status of a transaction.

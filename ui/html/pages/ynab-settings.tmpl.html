@@ -1,0 +1,80 @@
+{{define "title"}}YNAB Settings{{end}}
+
+{{define "main"}}
+
+<h2>YNAB sync settings</h2>
+
+<!--Sync Budgets and accs-->
+<section>
+    <form hx-post="/ynab-budgets-sync" hx-boost="true" hx-swap="outerHTML" hx-target="#sync-status">
+        <article>
+            <h3>Sync Budgets with Accounts</h3>
+            <footer>
+                <button type="submit">Sync</button>
+            </footer>
+        </article>
+    </form>
+</section>
+
+<section>
+    <div class="grid">
+        <!--  Categories       -->
+        <form hx-post="/ynab-categories-sync" hx-boost="true" hx-swap="outerHTML" hx-target="#sync-status">
+            <article>
+                <h3>Sync Categories</h3>
+                <div class="grid align-center">
+                    <div>
+                        <label for="category-budget">Budget</label>
+                        <select name="budget" id="category-budget">
+                            {{range .Budgets}}
+                            <option value="{{.ID}}">{{.Name}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="category-last-known">
+                            <input type="checkbox" id="category-last-known" name="last-known" role="switch" checked />
+                            Last known
+                        </label>
+                    </div>
+                </div>
+
+                <footer>
+                    <button type="submit">Sync</button>
+                </footer>
+            </article>
+        </form>
+        <!--   Payee      -->
+        <form hx-post="/ynab-payee-sync" hx-boost="true" hx-swap="outerHTML" hx-target="#sync-status">
+            <article>
+                <h3>Sync Payee</h3>
+                <div class="grid align-center">
+                    <div>
+                        <label for="payee-budget">Budget</label>
+                        <select name="budget" id="payee-budget">
+                            {{range .Budgets}}
+                            <option value="{{.ID}}">{{.Name}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="payee-last-known">
+                            <input type="checkbox" id="payee-last-known" name="last-known" role="switch" checked />
+                            Last known
+                        </label>
+                    </div>
+                </div>
+
+                <footer>
+                    <button type="submit">Sync</button>
+                </footer>
+            </article>
+        </form>
+    </div>
+</section>
+
+<section id="sync-status">
+    {{template "sync-statuses" .}}
+</section>
+
+{{end}}

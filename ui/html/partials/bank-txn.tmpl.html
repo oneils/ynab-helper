@@ -1,0 +1,100 @@
+{{define "bank-txn"}}
+
+<article id="bank-txn">
+    <p>
+        Select correct parameter to be uploaded to the YNAB.
+    </p>
+
+
+    <div class="container">
+        <form hx-post="/ynab-add-txn" hx-boost="true" hx-swap="outerHTML" hx-target="#transactions">
+            <div class="grid">
+                <div>
+                    <label for="budget-txn">Budget</label>
+                    <select id="budget-txn" name="budget" required>
+                        {{range .Budgets}}
+                        <option value="{{.ID}}"
+                                {{if eq $.BudgetID .ID}} selected {{end}}
+                        >{{.Name}}
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+                <div>
+                    <label for="account-txn">Account</label>
+                    <select id="account-txn" name="account" required>
+                        {{range .Accs}}
+                        <option value="{{.ID}}"
+                                {{if eq $.AccID .ID}} selected {{end}}
+                        >{{.Name}}
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="payee-txn">Payee</label>
+                    <select id="payee-txn" name="payee" required>
+                        <option value="" selected>Select…</option>
+                        {{range .Payee}}
+                        <option value="{{.ID}}"
+                                {{if eq $.SuggestedPayeeID .ID}} selected {{end}}
+                        >{{.Name}}
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+                <div>
+                    <label for="category-txn">Category</label>
+                    <select id="category-txn" name="category" required>
+                        <option value="" selected>Select…</option>
+                        {{range .Categories}}
+                        <option value="{{.ID}}"
+                                {{if eq $.SuggestedCategoryID .ID}} selected {{end}}
+                        >{{.Name}}
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+                <div>
+                    <label for="amount">Amount</label>
+                    <input type="number" name="amount" aria-label="Amount" required value="{{.Txn.Amount}}"/>
+                    <input type="hidden" name="txnDate" aria-label="txnDate" required value="{{.Txn.TxnTime}}"/>
+                    <input type="hidden" name="txnID" aria-label="txnID" required value="{{.Txn.ID}}"/>
+                </div>
+
+            </div>
+            <section>
+                <div class="grid">
+                    <div>
+                        <label for="currency">Currency</label>
+                        <label id="currency" aria-label="currency">{{.Txn.Currency}}</label>
+                    </div>
+                    <div>
+                        <label for="txn-date">Transaction Date:</label>
+                        <label id="txn-date" aria-label="txn-date">{{.Txn.TxnTime}}</label>
+                    </div>
+                </div>
+            </section>
+            <section>
+                <code>
+                    {{.Txn.Description}}
+                </code>
+            </section>
+            <section>
+                <textarea name="memo" aria-label="memo" placeholder="memo"></textarea>
+            </section>
+            <button type="submit">Add to YNAB</button>
+        </form>
+
+    </div>
+    <!--    <footer>-->
+    <!--        <a href="#cancel" role="button" class="secondary" data-target="modal-popup"-->
+    <!--           onclick="toggleModal(event)">Cancel</a>-->
+    <!--        <a href="#confirm" role="button" data-target="modal-popup" onclick="toggleModal(event)">Save</a>-->
+    <!--    </footer>-->
+</article>
+
+{{end}}

@@ -1,0 +1,23 @@
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+
+# Commit Message Rules:
+# 1. Follow Conventional Commits (https://www.conventionalcommits.org/en/v1.0.0/)
+#    Format: <type>[optional scope]: <description>
+#
+# 2. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+#    - feat: new feature (MINOR version)
+#    - fix: bug fix (PATCH version)
+#    - ci: changes to CI configuration
+#
+# 3. Breaking changes: add ! after type/scope or use BREAKING CHANGE: footer
+#
+# 4. Do NOT mention Claude or AI assistants as co-authors
+#
+# Examples:
+#   fix(ci): add GHCR image push to docker build step
+#   feat(api): add transaction filtering endpoint
+#   docs: update installation instructions

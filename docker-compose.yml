@@ -1,0 +1,13 @@
+services:
+  ynab-helper:
+    build: ./
+    # image: ghcr.io/oneils/ynab-helper:latest
+    ports:
+      - 8080:8080
+    volumes:
+      - ./data:/data
+    env_file: ./.env
+    environment:
+      - TZ=Europe/Warsaw
+      - ynab-token=${YNAB_TOKEN}
+      - SQLITE_DB_PATH=/data/ynab.db

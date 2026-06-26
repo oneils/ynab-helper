@@ -1,0 +1,141 @@
+name: build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+
+      - name: set up go 1.25
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.7.2
+
+      - name: build and test
+        run: make check build
+
+  docker:
+    needs: build
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            artifact: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-latest
+            artifact: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PAT }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: build and push to Docker Hub by digest
+        id: build-dockerhub
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=oneils/ynab-helper,push-by-digest=true,name-canonical=true,push=true
+      - name: build and push to GHCR by digest
+        id: build-ghcr
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+      - name: export digests
+        run: |
+          mkdir -p /tmp/digests-dockerhub
+          mkdir -p /tmp/digests-ghcr
+          digest_dockerhub="${{ steps.build-dockerhub.outputs.digest }}"
+          digest_ghcr="${{ steps.build-ghcr.outputs.digest }}"
+          touch "/tmp/digests-dockerhub/${digest_dockerhub#sha256:}"
+          touch "/tmp/digests-ghcr/${digest_ghcr#sha256:}"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: digests-dockerhub-${{ matrix.artifact }}
+          path: /tmp/digests-dockerhub/*
+          retention-days: 1
+      - uses: actions/upload-artifact@v6
+        with:
+          name: digests-ghcr-${{ matrix.artifact }}
+          path: /tmp/digests-ghcr/*
+          retention-days: 1
+
+  docker-merge:
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests-dockerhub
+          pattern: digests-dockerhub-*
+          merge-multiple: true
+      - uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests-ghcr
+          pattern: digests-ghcr-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PAT }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: determine tags
+        id: tags
+        run: |
+          ref="${GITHUB_REF#refs/*/}"
+          ref="${ref//\//_}"
+          echo "ref=${ref}" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
+      - name: create manifest and push to Docker Hub
+        working-directory: /tmp/digests-dockerhub
+        run: |
+          ref="${{ steps.tags.outputs.ref }}"
+          is_tag="${{ steps.tags.outputs.is_tag }}"
+          tags="-t oneils/ynab-helper:${ref}"
+          if [[ "$is_tag" == "true" ]]; then
+            tags="${tags} -t oneils/ynab-helper:latest"
+          fi
+          docker buildx imagetools create ${tags} \
+            $(printf 'oneils/ynab-helper@sha256:%s ' *)
+      - name: create manifest and push to GHCR
+        working-directory: /tmp/digests-ghcr
+        run: |
+          ref="${{ steps.tags.outputs.ref }}"
+          is_tag="${{ steps.tags.outputs.is_tag }}"
+          tags="-t ghcr.io/${{ github.repository }}:${ref}"
+          if [[ "$is_tag" == "true" ]]; then
+            tags="${tags} -t ghcr.io/${{ github.repository }}:latest"
+          fi
+          docker buildx imagetools create ${tags} \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)

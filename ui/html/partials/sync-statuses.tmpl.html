@@ -1,0 +1,46 @@
+{{define "sync-statuses"}}
+<section id="sync-status">
+    <div>
+        <h3>YNAB sync history</h3>
+        <label for="history-budget">Budget</label>
+        <select name="budget" id="history-budget" hx-trigger="change" hx-get="/sync-history" hx-target="#sync-status">
+            <option value="">Select...</option>
+            {{range .Budgets}}
+            <option value="{{.ID}}">{{.Name}}</option>
+            {{end}}
+        </select>
+        {{if .History}}
+        <div class="grid">
+            {{range .History}}
+            <article>
+                <h4>{{.Name}}</h4>
+                Updated at: <small>{{.UpdatedAt}}</small><br/>
+                Status: <label {{if eq .Status "success" }}class="ok-status" {{else}} class="error" {{end}}>{{.Status}}</label><br/>
+                {{with .Message}}
+                Message: <label>{{.}}</label>
+                {{end}}
+            </article>
+
+            {{end}}
+
+        </div>
+
+        {{else if .ErrorMsg}}
+
+        <div class="grid">
+            <article>
+                <h4>History error</h4>
+                <label class='error'>{{.ErrorMsg}}</label>
+            </article>
+
+            {{else}}
+
+            <div>No history found</div>
+
+            {{end}}
+        </div>
+    </div>
+</section>
+
+
+{{end}}

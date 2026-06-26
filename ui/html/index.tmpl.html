@@ -1,0 +1,167 @@
+{{define "base"}}
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <title>{{template "title" .}} - YNAB Helper</title>
+        <link rel="stylesheet" href="/static/css/main.css" />
+        <link rel="shortcut icon" href="/static/img/favicon.ico" type="image/x-icon" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Stick+No+Bills:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+    </head>
+    <body>
+        <div class="app-container">
+            <!-- Sidebar Navigation -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="24" height="24" rx="4" fill="#409FFF" />
+                            <path
+                                d="M7 12L10 15L17 8"
+                                stroke="white"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+                        <span>YNAB Helper</span>
+                    </div>
+                </div>
+
+                <nav class="sidebar-nav">
+                    <a href="/" class="nav-item">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path
+                                d="M10 3L10 10M10 3L6 7M10 3L14 7"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <path
+                                d="M3 10L3 15C3 15.5523 3.44772 16 4 16L16 16C16.5523 16 17 15.5523 17 15L17 10"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+                        <span>Import from Bank</span>
+                    </a>
+                    <a href="/import-bank-txns" class="nav-item">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <rect x="3" y="4" width="14" height="12" rx="1" stroke="currentColor" stroke-width="1.5" />
+                            <path
+                                d="M7 8H13M7 11H13M7 14H10"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+                        <span>Import History</span>
+                    </a>
+                    <a href="/settings" class="nav-item">
+                        <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
+                            <path
+                                d="M58 12.5 L50 16.25 L46 12.125 L49.5 4.063 C39.5 4.063 37 9 37 14 V18 L3.5 52 L1.75 58 L3.875 60 L9.938 58.5 L44 25 H48 C53 25 58 22.5 58 12.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linejoin="round"
+                            />
+                            <line
+                                x1="28"
+                                y1="26"
+                                x2="15"
+                                y2="13"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                            />
+                            <polygon
+                                points="12,16 18,10 8,4 6,6"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linejoin="round"
+                            />
+                            <line
+                                x1="36"
+                                y1="34"
+                                x2="41"
+                                y2="39"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                            />
+                            <rect
+                                x="46.257"
+                                y="35.065"
+                                width="8.485"
+                                height="26.87"
+                                transform="rotate(135 50.5 48.5)"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                        <span>Settings</span>
+                    </a>
+                    <a href="/about" class="nav-item">
+                        <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
+                            <circle cx="32" cy="32" r="26" stroke="currentColor" stroke-width="1.5" />
+                            <circle cx="32" cy="20" r="2" fill="currentColor" />
+                            <line
+                                x1="32"
+                                y1="28"
+                                x2="32"
+                                y2="44"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+
+                        <span>About</span>
+                    </a>
+                </nav>
+
+                <div class="theme-switcher">
+                    <button data-theme-switcher="auto" class="theme-btn">Auto</button>
+                    <button data-theme-switcher="light" class="theme-btn">Light</button>
+                    <button data-theme-switcher="dark" class="theme-btn active">Dark</button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <div class="main-wrapper">
+                <main class="main-content">{{template "main" .}}</main>
+
+                {{template "footer" .}}
+            </div>
+        </div>
+
+        {{template "modal-popup" .}}
+        <script
+            src="https://unpkg.com/htmx.org@1.9.4"
+            integrity="sha384-zUfuhFKKZCbHTY6aRR46gxiqszMk5tcHjsVFxnUo8VMus4kHGVdIYVbOYYNlKmHV"
+            crossorigin="anonymous"
+        ></script>
+        <script src="/static/js/main.js" crossorigin="anonymous"></script>
+        <script src="/static/js/minimal-theme-switcher.js" crossorigin="anonymous"></script>
+        <script src="/static/js/modal.js" crossorigin="anonymous"></script>
+        <script src="/static/js/toast.js" crossorigin="anonymous"></script>
+        <script src="/static/js/bulk-edit.js" crossorigin="anonymous"></script>
+        <script src="/static/js/datalist-sync.js" crossorigin="anonymous"></script>
+    </body>
+</html>
+
+{{end}}

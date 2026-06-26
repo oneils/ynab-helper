@@ -1,0 +1,164 @@
+{{define "bank-transactions-preview"}}
+
+<section id="transactions" class="transactions-section">
+    <!-- Preview Header -->
+    <div class="preview-header">
+        <div class="preview-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+        </div>
+        <h3>Import Preview</h3>
+        <p class="preview-subtitle">Review before importing</p>
+    </div>
+
+    <!-- Format Detection Banner -->
+    <div class="preview-banner preview-banner-{{if .Preview.DetectedFormat}}success{{else}}warning{{end}}">
+        {{if .Preview.DetectedFormat}}
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>Detected format: <strong>{{.Preview.DetectedFormat}}</strong></span>
+        {{else}}
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>Unknown format - using generic parser</span>
+        {{end}}
+    </div>
+
+    <!-- Statistics -->
+    <div class="preview-stats">
+        <div class="stat-card stat-total">
+            <div class="stat-value">{{.Preview.TotalCount}}</div>
+            <div class="stat-label">Total Transactions</div>
+        </div>
+        <div class="stat-card stat-new">
+            <div class="stat-value">{{.Preview.NewCount}}</div>
+            <div class="stat-label">New</div>
+        </div>
+        {{if gt .Preview.DuplicateCount 0}}
+        <div class="stat-card stat-duplicate">
+            <div class="stat-value">{{.Preview.DuplicateCount}}</div>
+            <div class="stat-label">Duplicates</div>
+        </div>
+        {{end}}
+        {{if gt .Preview.ErrorCount 0}}
+        <div class="stat-card stat-error">
+            <div class="stat-value">{{.Preview.ErrorCount}}</div>
+            <div class="stat-label">Errors</div>
+        </div>
+        {{end}}
+    </div>
+
+    <!-- Sample Transactions -->
+    <div class="section-header">
+        <h4>Sample Transactions (first 10)</h4>
+        <span class="file-name">{{.Filename}}</span>
+    </div>
+
+    {{if .Preview.Transactions}}
+    <figure>
+        <table role="grid" class="preview-table">
+            <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Payee</th>
+                    <th scope="col">Amount</th>
+                    <th scope="col">Currency</th>
+                    <th scope="col">Description</th>
+                    <th scope="col">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Preview.Transactions}}
+                <tr class="{{if .ErrorMsg}}preview-row-error{{else if eq .Status "DUPLICATE"}}preview-row-duplicate{{else}}preview-row-new{{end}}">
+                    <td><small>{{.TxnTime.Format "2006-01-02"}}</small></td>
+                    <td><small>{{.Payee}}</small></td>
+                    <td><small>{{.Amount}}</small></td>
+                    <td><small>{{.Currency}}</small></td>
+                    <td><small>{{.Description}}</small></td>
+                    <td>
+                        <small>
+                            {{if .ErrorMsg}}
+                                <span class="badge badge-error">Error</span>
+                            {{else if eq .Status "DUPLICATE"}}
+                                <span class="badge badge-warning">Duplicate</span>
+                            {{else}}
+                                <span class="badge badge-success">New</span>
+                            {{end}}
+                        </small>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </figure>
+    {{end}}
+
+    <!-- Validation Errors -->
+    {{if .Preview.ValidationErrors}}
+    <div class="preview-errors">
+        <h4>Validation Errors</h4>
+        <ul>
+            {{range .Preview.ValidationErrors}}
+            <li class="error-item">{{.}}</li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    <!-- No New Transactions Message -->
+    {{if eq .Preview.NewCount 0}}
+    <div class="preview-info-message">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div>
+            <strong>No new transactions to import</strong>
+            <p>All transactions in this file have already been imported.</p>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Action Buttons -->
+    <div class="preview-actions {{if eq .Preview.NewCount 0}}preview-actions-single{{end}}">
+        {{if gt .Preview.NewCount 0}}
+        <form
+            hx-post="/confirm-bank-txns"
+            hx-target="#transactions"
+            hx-swap="outerHTML"
+        >
+            <input type="hidden" name="file_uuid" value="{{.FileUUID}}" />
+            <input type="hidden" name="budget" value="{{.BudgetID}}" />
+            <input type="hidden" name="account" value="{{.AccountID}}" />
+
+            <button type="submit" class="button-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Confirm Import ({{.Preview.NewCount}} transactions)
+            </button>
+        </form>
+        {{end}}
+
+        <button
+            type="button"
+            class="button-secondary"
+            hx-post="/cancel-preview"
+            hx-vals='{"file_uuid": "{{.FileUUID}}"}'
+            onclick="window.location.reload()"
+        >
+            Cancel
+        </button>
+    </div>
+</section>
+
+{{end}}

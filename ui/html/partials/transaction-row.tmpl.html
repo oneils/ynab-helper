@@ -1,0 +1,432 @@
+{{define "transaction-row-view"}}
+<tr id="txn-row-{{.Txn.ID}}" class="txn-row txn-row-view" data-txn-id="{{.Txn.ID}}">
+    <td>
+        <input
+            type="checkbox"
+            class="txn-checkbox"
+            data-txn-id="{{.Txn.ID}}"
+            aria-label="Select transaction"
+        />
+    </td>
+    <td><small>{{.Index}}</small></td>
+    <td><small>{{.Txn.Payee}}</small></td>
+    <td><small>{{.Txn.Amount}}</small></td>
+    <td><small>{{.Txn.Currency}}</small></td>
+    <td><small>{{.Txn.TxnTime.Format "2006-01-02"}}</small></td>
+    <td><small>{{.Txn.Account.Name}}</small></td>
+    <td>
+        <small>
+            <span class="status-badge status-{{.Txn.Status}}">{{.Txn.Status}}</span>
+        </small>
+    </td>
+    <td><small>{{.Txn.Description}}</small></td>
+    <td class="txn-actions">
+        <button
+            type="button"
+            class="action-link"
+            hx-get="/bank-txns/{{.Txn.ID}}/edit-inline?accId={{.Txn.Account.ID}}"
+            hx-target="#txn-row-{{.Txn.ID}}"
+            hx-swap="outerHTML"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            Edit
+        </button>
+        <button
+            type="button"
+            class="action-link action-skip"
+            hx-post="/bank-txns/{{.Txn.ID}}/skip?accId={{.Txn.Account.ID}}"
+            hx-target="#txn-row-{{.Txn.ID}}"
+            hx-swap="outerHTML"
+            hx-confirm="Skip this transaction?"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Skip
+        </button>
+    </td>
+</tr>
+{{end}}
+
+{{define "transaction-row-edit"}}
+<tr id="txn-row-{{.Txn.ID}}" class="txn-row txn-row-edit" data-txn-id="{{.Txn.ID}}">
+    <td>
+        <input
+            type="checkbox"
+            class="txn-checkbox"
+            data-txn-id="{{.Txn.ID}}"
+            aria-label="Select transaction"
+            disabled
+        />
+    </td>
+    <td><small>{{.Index}}</small></td>
+
+    <!-- Payee field with datalist -->
+    <td style="position: relative;">
+        <input
+            type="text"
+            name="payee"
+            class="inline-input payee-input-smart"
+            value="{{.Txn.Payee}}"
+            list="payees-{{.Txn.ID}}"
+            placeholder="Payee name"
+            data-payee-id=""
+            data-budget-id="{{.BudgetID}}"
+            data-description="{{.Txn.Description}}"
+            data-txn-id="{{.Txn.ID}}"
+        />
+        <datalist id="payees-{{.Txn.ID}}">
+            {{range .Payees}}
+            <option value="{{.Name}}" data-id="{{.ID}}">{{.Name}}</option>
+            {{end}}
+        </datalist>
+        <div id="suggestions-{{.Txn.ID}}" class="suggestions-dropdown" style="display:none;"></div>
+    </td>
+
+    <!-- Amount field -->
+    <td>
+        <input
+            type="number"
+            name="amount"
+            class="inline-input inline-input-number"
+            value="{{.Txn.Amount}}"
+            step="0.01"
+            required
+        />
+    </td>
+
+    <!-- Currency (read-only) -->
+    <td><small>{{.Txn.Currency}}</small></td>
+
+    <!-- Date field -->
+    <td>
+        <input
+            type="date"
+            name="date"
+            class="inline-input inline-input-date"
+            value="{{.Txn.TxnTime.Format "2006-01-02"}}"
+            required
+        />
+    </td>
+
+    <!-- Account Name (read-only) -->
+    <td><small>{{.Txn.Account.Name}}</small></td>
+
+    <!-- Category field with datalist -->
+    <td style="position: relative;">
+        <input
+            type="text"
+            name="category"
+            class="inline-input category-input-smart"
+            value=""
+            list="categories-{{.Txn.ID}}"
+            placeholder="Category"
+            data-category-id=""
+            data-budget-id="{{.BudgetID}}"
+            data-description="{{.Txn.Description}}"
+            data-txn-id="{{.Txn.ID}}"
+        />
+        <datalist id="categories-{{.Txn.ID}}">
+            {{range .Categories}}
+            <option value="{{.Name}}" data-id="{{.ID}}">{{.Name}}</option>
+            {{end}}
+        </datalist>
+        <div id="category-suggestions-{{.Txn.ID}}" class="suggestions-dropdown" style="display:none;"></div>
+    </td>
+
+    <!-- Description/Memo (original message shown as placeholder) -->
+    <td>
+        <input
+            type="text"
+            name="memo"
+            class="inline-input"
+            value=""
+            placeholder="{{.Txn.Description}}"
+            title="{{.Txn.Description}}"
+        />
+    </td>
+
+    <!-- Actions: Save & Cancel -->
+    <td class="txn-actions">
+        <form
+            hx-post="/bank-txns/{{.Txn.ID}}/save-inline"
+            hx-target="#txn-row-{{.Txn.ID}}"
+            hx-swap="outerHTML"
+            hx-include="closest tr"
+        >
+            <input type="hidden" name="txn_id" value="{{.Txn.ID}}" />
+            <input type="hidden" name="budget_id" value="{{.BudgetID}}" />
+            <input type="hidden" name="account_id" value="{{.Txn.Account.ID}}" />
+            <input type="hidden" name="payee_id" value="" class="payee-id-field" />
+            <input type="hidden" name="category_id" value="" class="category-id-field" />
+
+            <button type="submit" class="action-link action-save">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Save
+            </button>
+        </form>
+
+        <button
+            type="button"
+            class="action-link action-cancel"
+            hx-get="/bank-txns/{{.Txn.ID}}/view-inline?accId={{.Txn.Account.ID}}"
+            hx-target="#txn-row-{{.Txn.ID}}"
+            hx-swap="outerHTML"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Cancel
+        </button>
+    </td>
+</tr>
+
+<script>
+(function() {
+    const payeeInput = document.querySelector('#txn-row-{{.Txn.ID}} .payee-input-smart');
+    const categoryInput = document.querySelector('#txn-row-{{.Txn.ID}} input[name="category"]');
+    const payeeIdField = document.querySelector('#txn-row-{{.Txn.ID}} .payee-id-field');
+    const categoryIdField = document.querySelector('#txn-row-{{.Txn.ID}} .category-id-field');
+    const suggestionsDiv = document.getElementById('suggestions-{{.Txn.ID}}');
+
+    if (!payeeInput) return;
+
+    let suggestionsLoaded = false;
+
+    payeeInput.addEventListener('focus', async function() {
+        if (suggestionsLoaded) return; // Only fetch once
+        suggestionsLoaded = true;
+
+        const budgetId = payeeInput.dataset.budgetId;
+        const description = payeeInput.dataset.description;
+
+        if (!budgetId || !description) return;
+
+        try {
+            const response = await fetch(
+                `/api/payee-suggestions?budget_id=${encodeURIComponent(budgetId)}&description=${encodeURIComponent(description)}`
+            );
+
+            if (!response.ok) {
+                console.error('Failed to fetch suggestions:', response.statusText);
+                return;
+            }
+
+            const data = await response.json();
+            const suggestions = data.suggestions || [];
+
+            if (suggestions.length === 0) return;
+
+            // Auto-fill if high confidence (>= 90%)
+            const topSuggestion = suggestions[0];
+            if (topSuggestion.confidence >= 90) {
+                autoFillSuggestion(topSuggestion);
+                showToast(`Auto-filled: ${topSuggestion.payee_name} (${Math.round(topSuggestion.confidence)}% match)`, 'success');
+            } else {
+                showSuggestionsDropdown(suggestions);
+            }
+        } catch (error) {
+            console.error('Error fetching suggestions:', error);
+        }
+    });
+
+    function autoFillSuggestion(suggestion) {
+        // Fill payee
+        payeeInput.value = suggestion.payee_name;
+        payeeIdField.value = suggestion.payee_id;
+
+        // Fill category if available
+        if (suggestion.category_id && categoryInput) {
+            categoryInput.value = suggestion.category_name;
+            categoryIdField.value = suggestion.category_id;
+        }
+
+        // Highlight inputs briefly to show auto-fill
+        payeeInput.style.backgroundColor = '#e8f5e9';
+        setTimeout(() => { payeeInput.style.backgroundColor = ''; }, 2000);
+    }
+
+    function showSuggestionsDropdown(suggestions) {
+        suggestionsDiv.innerHTML = '';
+        suggestions.forEach(suggestion => {
+            const item = document.createElement('div');
+            item.className = 'suggestion-item';
+            item.innerHTML = `
+                <strong>${suggestion.payee_name}</strong>
+                ${suggestion.category_name ? `<span class="suggestion-category">${suggestion.category_name}</span>` : ''}
+                <span class="suggestion-confidence">${Math.round(suggestion.confidence)}%</span>
+                <small class="suggestion-reason">${suggestion.reason}</small>
+            `;
+            item.addEventListener('click', function() {
+                autoFillSuggestion(suggestion);
+                hideSuggestionsDropdown();
+            });
+            suggestionsDiv.appendChild(item);
+        });
+        suggestionsDiv.style.display = 'block';
+    }
+
+    function hideSuggestionsDropdown() {
+        suggestionsDiv.style.display = 'none';
+    }
+
+    function showToast(message, type) {
+        // Trigger HX event for toast notification
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message, type }
+        }));
+    }
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!suggestionsDiv.contains(e.target) && e.target !== payeeInput) {
+            hideSuggestionsDropdown();
+        }
+    });
+
+    // Hide suggestions when input loses focus (with delay to allow click on suggestion)
+    payeeInput.addEventListener('blur', function() {
+        setTimeout(hideSuggestionsDropdown, 200);
+    });
+})();
+</script>
+
+<script>
+(function() {
+    const categoryInput = document.querySelector('#txn-row-{{.Txn.ID}} .category-input-smart');
+    const payeeInput = document.querySelector('#txn-row-{{.Txn.ID}} .payee-input-smart');
+    const categoryIdField = document.querySelector('#txn-row-{{.Txn.ID}} .category-id-field');
+    const payeeIdField = document.querySelector('#txn-row-{{.Txn.ID}} .payee-id-field');
+    const categorySuggestionsDiv = document.getElementById('category-suggestions-{{.Txn.ID}}');
+
+    if (!categoryInput) return;
+
+    let categorySuggestionsLoaded = false;
+
+    // Fetch category suggestions
+    async function fetchCategorySuggestions() {
+        const budgetId = categoryInput.dataset.budgetId;
+        const description = categoryInput.dataset.description;
+        const payeeId = payeeIdField.value; // Get current payee ID
+
+        if (!budgetId) return;
+
+        try {
+            let url = `/api/category-suggestions?budget_id=${encodeURIComponent(budgetId)}`;
+            if (payeeId) {
+                // Prioritize payee-based suggestions
+                url += `&payee_id=${encodeURIComponent(payeeId)}`;
+            } else if (description) {
+                // Fallback to description-based
+                url += `&description=${encodeURIComponent(description)}`;
+            }
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.error('Failed to fetch category suggestions:', response.statusText);
+                return;
+            }
+
+            const data = await response.json();
+            const suggestions = data.suggestions || [];
+
+            if (suggestions.length === 0) return;
+
+            // Auto-fill if high confidence (>= 90%)
+            const topSuggestion = suggestions[0];
+            if (topSuggestion.confidence >= 90) {
+                autoFillCategory(topSuggestion);
+                const source = topSuggestion.source === 'payee' ? 'based on payee' : 'based on description';
+                showToast(`Auto-filled category: ${topSuggestion.category_name} (${Math.round(topSuggestion.confidence)}% match ${source})`, 'success');
+            } else {
+                showCategorySuggestionsDropdown(suggestions);
+            }
+        } catch (error) {
+            console.error('Error fetching category suggestions:', error);
+        }
+    }
+
+    // Trigger on category field focus
+    categoryInput.addEventListener('focus', async function() {
+        if (categorySuggestionsLoaded) return;
+        categorySuggestionsLoaded = true;
+        await fetchCategorySuggestions();
+    });
+
+    // CRITICAL: Trigger when payee changes (most important feature!)
+    if (payeeInput) {
+        payeeInput.addEventListener('change', async function() {
+            // Reset flag to allow re-fetching
+            categorySuggestionsLoaded = false;
+            hideCategorySuggestionsDropdown();
+
+            // Small delay to ensure payeeIdField is updated
+            setTimeout(async () => {
+                if (payeeIdField.value) {
+                    await fetchCategorySuggestions();
+                }
+            }, 100);
+        });
+    }
+
+    function autoFillCategory(suggestion) {
+        categoryInput.value = suggestion.category_name;
+        categoryIdField.value = suggestion.category_id;
+
+        // Highlight input briefly
+        categoryInput.style.backgroundColor = '#e8f5e9';
+        setTimeout(() => { categoryInput.style.backgroundColor = ''; }, 2000);
+    }
+
+    function showCategorySuggestionsDropdown(suggestions) {
+        categorySuggestionsDiv.innerHTML = '';
+        suggestions.forEach(suggestion => {
+            const item = document.createElement('div');
+            item.className = 'suggestion-item';
+
+            const sourceLabel = suggestion.source === 'payee' ? '(from payee)' : '(from description)';
+            item.innerHTML = `
+                <strong>${suggestion.category_name}</strong> <small class="suggestion-source">${sourceLabel}</small>
+                <span class="suggestion-confidence">${Math.round(suggestion.confidence)}%</span>
+                <small class="suggestion-reason">${suggestion.reason}</small>
+            `;
+            item.addEventListener('click', function() {
+                autoFillCategory(suggestion);
+                hideCategorySuggestionsDropdown();
+            });
+            categorySuggestionsDiv.appendChild(item);
+        });
+        categorySuggestionsDiv.style.display = 'block';
+    }
+
+    function hideCategorySuggestionsDropdown() {
+        categorySuggestionsDiv.style.display = 'none';
+    }
+
+    function showToast(message, type) {
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message, type }
+        }));
+    }
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!categorySuggestionsDiv.contains(e.target) && e.target !== categoryInput) {
+            hideCategorySuggestionsDropdown();
+        }
+    });
+
+    // Hide suggestions when input loses focus
+    categoryInput.addEventListener('blur', function() {
+        setTimeout(hideCategorySuggestionsDropdown, 200);
+    });
+})();
+</script>
+{{end}}

@@ -1,0 +1,36 @@
+{{define "accounts-select"}}
+
+<div id="accounts-select" class="form-group">
+    <label for="account">
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+        >
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+            <line x1="1" y1="10" x2="23" y2="10"></line>
+        </svg>
+        Select Account
+    </label>
+    <select
+        id="account"
+        name="account"
+        hx-get="/bank-txns"
+        hx-target="#transactions"
+        hx-include="[name='status'], [name='budget']"
+        hx-trigger="change, load"
+    >
+        <option value="" selected>All Accounts</option>
+        {{range .Accs}}
+        <option value="{{.ID}}">{{.Name}}</option>
+        {{end}}
+    </select>
+</div>
+
+{{end}}

@@ -1,0 +1,85 @@
+{{define "modal-popup"}}
+<dialog id="modal-popup">
+    <article>
+        <a href="#close" aria-label="Close" class="close" data-target="modal-popup"
+           onclick="toggleModal(event)"></a>
+        <h3>Confirm your action!</h3>
+        <p>
+            Cras sit amet maximus risus. Pellentesque sodales odio sit amet augue finibus
+            pellentesque. Nullam finibus risus non semper euismod.
+        </p>
+
+
+        <div class="container">
+            <form>
+                <div class="grid">
+                    <div>
+                        <label for="select">Budget</label>
+                        <select id="select" name="select" required>
+                            <option>Family Poland</option>
+                            <option>USD Savings</option>
+                            <option>EUR Savings</option>
+                            <option>Test</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="select">Account</label>
+                        <select id="select" name="select" required>
+                            <option value="" selected>Select…</option>
+                            <option>Santander</option>
+                            <option>Revolut</option>
+                            <option>Revolut Tania</option>
+                            <option>PKO Alexey</option>
+                            <option>PKO Tania</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div>
+                        <label for="select">Payee</label>
+                        <select id="select" name="select" required>
+                            <option value="" selected>Select…</option>
+                            <option>Zabka</option>
+                            <option>Lidl</option>
+                            <option>Cafe</option>
+                            <option>Rosman</option>
+                            <option>N/A</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="select">Category</label>
+                        <select id="select" name="select" required>
+                            <option value="" selected>Select…</option>
+                            <option>Groceries</option>
+                            <option>Cosmetics & Household Chemicals</option>
+                            <option>Digning Out</option>
+                            <option>Education</option>
+                            <option>Games</option>
+                            <option>School</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="amount">Amount</label>
+                        <input type="number" name="amount" aria-label="Amount" required />
+                    </div>
+                </div>
+                <section>
+                    <code>
+                        DOP. VISA 421352******8409 PŁATNOŚĆ KARTĄ 88.86 PLN ZABKA Z5433 K.1 WARSZAWA
+                    </code>
+                </section>
+                <section>
+                    <textarea name="comments" aria-label="comments" placeholder="comments"></textarea>
+                </section>
+            </form>
+
+        </div>
+        <footer>
+            <a href="#cancel" role="button" class="secondary" data-target="modal-popup"
+               onclick="toggleModal(event)">Cancel</a>
+            <a href="#confirm" role="button" data-target="modal-popup" onclick="toggleModal(event)">Save</a>
+        </footer>
+    </article>
+</dialog>
+{{end}}

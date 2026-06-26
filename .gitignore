@@ -23,7 +23,8 @@
 tmp/
 data/
 bin/
+target/
 
 .claude/
 .gemini/
-.ralphex/
+.ralphex/progress

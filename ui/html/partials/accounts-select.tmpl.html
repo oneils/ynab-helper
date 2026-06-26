@@ -22,13 +22,13 @@
         id="account"
         name="account"
         hx-get="/bank-txns"
-        hx-target="#transactions"
-        hx-include="[name='status'], [name='budget']"
-        hx-trigger="change, load"
+        hx-target="#txn-list-panel"
+        hx-include="[name='budget']"
+        hx-trigger="change"
     >
-        <option value="" selected>All Accounts</option>
+        <option value="" {{if eq .Account ""}}selected{{end}}>All Accounts</option>
         {{range .Accs}}
-        <option value="{{.ID}}">{{.Name}}</option>
+        <option value="{{.ID}}" {{if eq $.Account .ID}}selected{{end}}>{{.Name}}</option>
         {{end}}
     </select>
 </div>

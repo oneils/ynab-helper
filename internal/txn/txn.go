@@ -14,6 +14,22 @@ const (
 	TransactionInvalid   TransactionStatus = "INVALID"
 )
 
+// DisplayName returns the user-facing label for the transaction status.
+func (s TransactionStatus) DisplayName() string {
+	switch s {
+	case TransactionDraft:
+		return "Needs Review"
+	case TransactionProcessed:
+		return "Accepted"
+	case TransactionSkipped:
+		return "Skipped"
+	case TransactionInvalid:
+		return "Invalid"
+	default:
+		return string(s)
+	}
+}
+
 // Transaction represents a transaction imported from bank report files.
 type Transaction struct {
 	ID            string            `json:"id" bson:"_id"`

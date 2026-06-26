@@ -44,12 +44,10 @@ func (s *Server) routes() chi.Router {
 
 		router.Route("/bank-txns", func(r chi.Router) {
 			r.Get("/", s.bankTxnsHandler)
-			r.Get("/{id}", s.fetchBankTxnHandler)
+			r.Get("/{id}/detail", s.detailBankTxnHandler)
 			r.Post("/{id}/skip", s.skipBankTxnHandler)
 
 			// Inline editing endpoints
-			r.Get("/{id}/edit-inline", s.editInlineTxnHandler)
-			r.Get("/{id}/view-inline", s.viewInlineTxnHandler)
 			r.Post("/{id}/save-inline", s.saveInlineTxnHandler)
 
 			// Bulk operations endpoints

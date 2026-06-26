@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"mime/multipart"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ type TransactionStorer interface {
 	FetchTransactionsByAccount(ctx context.Context, accID string, status string) ([]Transaction, error)
 	FindTransactionByID(ctx context.Context, id string) (Transaction, error)
 	UpdateTransactionStatus(ctx context.Context, id string, status TransactionStatus) error
+	CountByStatus(ctx context.Context, accountID string) (map[TransactionStatus]int, error)
 }
 
 // BudgetFinder defines budget lookup operations.
@@ -98,7 +100,10 @@ func (p *Processor) Process(ctx context.Context, params ProcessParams) error {
 		data = params.Data
 	} else {
 		// Parse from file (original flow, backward compatible)
-		f, _ := params.FileHandler.Open()
+		f, err := params.FileHandler.Open()
+		if err != nil {
+			return fmt.Errorf("opening upload file: %w", err)
+		}
 		defer f.Close() //nolint:errcheck
 
 		csvReader := csv.NewReader(params.File)
@@ -169,7 +174,10 @@ func (p *Processor) Preview(ctx context.Context, params ProcessParams) (*Preview
 		if params.File == nil {
 			return nil, fmt.Errorf("no file or data provided")
 		}
-		f, _ := params.FileHandler.Open()
+		f, err := params.FileHandler.Open()
+		if err != nil {
+			return nil, fmt.Errorf("opening upload file: %w", err)
+		}
 		defer f.Close() //nolint:errcheck
 
 		csvReader := csv.NewReader(params.File)
@@ -258,6 +266,11 @@ func (p *Processor) Preview(ctx context.Context, params ProcessParams) (*Preview
 	return result, nil
 }
 
+// CountByStatus returns the number of transactions per status for a given account.
+func (p *Processor) CountByStatus(ctx context.Context, accountID string) (map[TransactionStatus]int, error) {
+	return p.txnStore.CountByStatus(ctx, accountID)
+}
+
 // FetchByID retrieves a transaction by ID.
 func (p *Processor) FetchByID(ctx context.Context, id string) (Transaction, error) {
 	return p.txnStore.FindTransactionByID(ctx, id)
@@ -280,7 +293,7 @@ func (p *Processor) SaveToYnab(ctx context.Context, form SaveForm) error {
 		return fmt.Errorf("parsing amount: %w", err)
 	}
 
-	amount := int(amountFloat * 1000)
+	amount := int(math.Round(amountFloat * 1000))
 
 	err = p.client.Upload(ynab.TxnReq{
 		BudgetID:   form.BudgetID,
@@ -304,44 +317,24 @@ func (p *Processor) SaveToYnab(ctx context.Context, form SaveForm) error {
 func (p *Processor) SuggestPayee(t Transaction, payees []ynab.Payee) ynab.Payee {
 	for _, payee := range payees {
 		if t.Payee == "" {
-			if strings.Contains(strings.ToLower(p.normalize(t.Description)), strings.ToLower(p.normalize(payee.Name))) {
+			if strings.Contains(strings.ToLower(normalize(t.Description)), strings.ToLower(normalize(payee.Name))) {
 				return payee
 			}
 		}
-		if strings.Contains(strings.ToLower(p.normalize(t.Payee)), strings.ToLower(p.normalize(payee.Name))) {
+		if strings.Contains(strings.ToLower(normalize(t.Payee)), strings.ToLower(normalize(payee.Name))) {
 			return payee
 		}
 	}
 	return ynab.Payee{}
 }
 
-// normalize removes Polish diacritics and non-ASCII characters.
-func (p *Processor) normalize(s string) string {
-	replacements := map[rune]rune{
-		'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n',
-		'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
-		'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N',
-		'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z',
-	}
 
-	var result strings.Builder
-	for _, char := range s {
-		if replacement, ok := replacements[char]; ok {
-			result.WriteRune(replacement)
-		} else if char >= 0x20 && char <= 0x7E {
-			result.WriteRune(char)
-		}
-	}
-	return result.String()
-}
 
 // parseYnabTime parses a date string in YNAB format.
 func (p *Processor) parseYnabTime(dateStr string) (string, error) {
-	// YNAB expects dates in format "2006-01-02"
-	// Just validate and return the same string
-	_, err := strconv.ParseInt(strings.ReplaceAll(dateStr, "-", ""), 10, 64)
+	_, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
-		return "", fmt.Errorf("invalid date format: %w", err)
+		return "", fmt.Errorf("invalid date format (expected YYYY-MM-DD): %w", err)
 	}
 	return dateStr, nil
 }
@@ -377,7 +370,7 @@ func (p *Processor) RecordPattern(ctx context.Context, budgetID, description, pa
 	// Create and upsert pattern
 	pattern := PayeePattern{
 		BudgetID:              budgetID,
-		NormalizedDescription: p.normalize(description),
+		NormalizedDescription: normalize(description),
 		PayeeID:               payeeID,
 		PayeeName:             payeeName,
 		CategoryID:            categoryID,

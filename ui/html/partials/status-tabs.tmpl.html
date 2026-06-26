@@ -1,0 +1,66 @@
+{{define "status-tabs"}}
+<div class="status-tabs" id="status-tabs">
+    <button
+        type="button"
+        class="status-tab{{if eq .ActiveStatus ""}} status-tab--active{{end}}"
+        hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status="
+        hx-target="#txn-list-panel"
+        hx-swap="innerHTML"
+        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+    >
+        All
+    </button>
+    <button
+        type="button"
+        class="status-tab{{if eq .ActiveStatus "DRAFT"}} status-tab--active{{end}}"
+        hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=DRAFT"
+        hx-target="#txn-list-panel"
+        hx-swap="innerHTML"
+        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+    >
+        Needs Review
+        {{with index .StatusCounts "DRAFT"}}
+        <span class="status-tab-count">{{.}}</span>
+        {{end}}
+    </button>
+    <button
+        type="button"
+        class="status-tab{{if eq .ActiveStatus "PROCESSED"}} status-tab--active{{end}}"
+        hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=PROCESSED"
+        hx-target="#txn-list-panel"
+        hx-swap="innerHTML"
+        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+    >
+        Accepted
+        {{with index .StatusCounts "PROCESSED"}}
+        <span class="status-tab-count">{{.}}</span>
+        {{end}}
+    </button>
+    <button
+        type="button"
+        class="status-tab{{if eq .ActiveStatus "SKIPPED"}} status-tab--active{{end}}"
+        hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=SKIPPED"
+        hx-target="#txn-list-panel"
+        hx-swap="innerHTML"
+        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+    >
+        Skipped
+        {{with index .StatusCounts "SKIPPED"}}
+        <span class="status-tab-count">{{.}}</span>
+        {{end}}
+    </button>
+    <button
+        type="button"
+        class="status-tab{{if eq .ActiveStatus "INVALID"}} status-tab--active{{end}}"
+        hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=INVALID"
+        hx-target="#txn-list-panel"
+        hx-swap="innerHTML"
+        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+    >
+        Invalid
+        {{with index .StatusCounts "INVALID"}}
+        <span class="status-tab-count">{{.}}</span>
+        {{end}}
+    </button>
+</div>
+{{end}}

@@ -1,0 +1,88 @@
+{{define "txn-detail-panel"}}
+<div id="txn-detail-panel-content" class="detail-panel-inner">
+    <div class="detail-header">
+        <span class="detail-amount{{if lt .Txn.Amount 0.0}} amount-outflow{{else}} amount-inflow{{end}}">
+            {{if gt .Txn.Amount 0.0}}+{{end}}{{.Txn.Amount}}
+        </span>
+        <span class="detail-date">{{.Txn.TxnTime.Format "2006-01-02"}}</span>
+    </div>
+
+    <div class="detail-field">
+        <label class="detail-label">Description (from bank)</label>
+        <div class="detail-description">{{.Txn.Description}}</div>
+    </div>
+
+    <form id="detail-form">
+        <input type="hidden" name="txnID" value="{{.Txn.ID}}">
+        <input type="hidden" name="budget" value="{{.BudgetID}}">
+        <input type="hidden" name="account" value="{{.Txn.Account.ID}}">
+        <input type="hidden" name="txnDate" value="{{.Txn.TxnTime.Format "2006-01-02"}}">
+        <input type="hidden" name="amount" value="{{.Txn.Amount}}">
+
+        <div class="detail-field">
+            <label for="detail-payee" class="detail-label">
+                Payee
+                {{if $.SugPayeeID}}<small class="auto-filled-hint">(suggested)</small>{{end}}
+            </label>
+            <select id="detail-payee" name="payee" class="detail-select">
+                <option value="">Select&hellip;</option>
+                {{range .Payees}}
+                <option value="{{.ID}}" {{if eq $.SugPayeeID .ID}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </select>
+        </div>
+
+        <div class="detail-field">
+            <label for="detail-category" class="detail-label">
+                Category
+                {{if $.SugCategoryID}}<small class="auto-filled-hint">(suggested)</small>{{end}}
+            </label>
+            <select id="detail-category" name="category" class="detail-select">
+                <option value="">Select&hellip;</option>
+                {{range .Categories}}
+                <option value="{{.ID}}" {{if eq $.SugCategoryID .ID}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </select>
+        </div>
+
+        <div class="detail-field">
+            <label for="detail-memo" class="detail-label">Memo</label>
+            <textarea id="detail-memo" name="memo" class="detail-textarea" rows="2" placeholder="Add a memo&hellip;"></textarea>
+        </div>
+    </form>
+
+    <div class="detail-actions">
+        <button type="button"
+            class="btn btn-primary"
+            hx-post="/ynab-add-txn?status={{.ActiveStatus}}"
+            hx-include="#detail-form"
+            hx-target="#txn-list-panel"
+            hx-swap="innerHTML"
+            hx-confirm="Send this transaction to YNAB?"
+            hx-on::after-request="document.getElementById('txn-detail-panel').classList.remove('txn-detail-panel--open')"
+        >
+            Accept &amp; Send to YNAB
+        </button>
+        <button type="button"
+            class="btn btn-secondary"
+            hx-post="/bank-txns/{{.Txn.ID}}/save-inline?status={{.ActiveStatus}}"
+            hx-include="#detail-form"
+            hx-target="#txn-list-panel"
+            hx-swap="innerHTML"
+            hx-on::after-request="document.getElementById('txn-detail-panel').classList.remove('txn-detail-panel--open')"
+        >
+            Remember Selections
+        </button>
+        <button type="button"
+            class="btn btn-secondary"
+            hx-post="/bank-txns/{{.Txn.ID}}/skip?accId={{.Txn.Account.ID}}&status={{.ActiveStatus}}"
+            hx-target="#txn-list-panel"
+            hx-swap="innerHTML"
+            hx-confirm="Skip this transaction?"
+            hx-on::after-request="document.getElementById('txn-detail-panel').classList.remove('txn-detail-panel--open')"
+        >
+            Skip
+        </button>
+    </div>
+</div>
+{{end}}

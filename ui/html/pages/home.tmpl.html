@@ -14,24 +14,6 @@
         hx-encoding="multipart/form-data"
         hx-trigger="submit"
     >
-        <!-- Step indicator -->
-        <div class="form-steps">
-            <div class="step-item">
-                <div class="step-number">1</div>
-                <div class="step-label">Select Budget</div>
-            </div>
-            <div class="step-divider"></div>
-            <div class="step-item">
-                <div class="step-number">2</div>
-                <div class="step-label">Choose Account</div>
-            </div>
-            <div class="step-divider"></div>
-            <div class="step-item">
-                <div class="step-number">3</div>
-                <div class="step-label">Upload File</div>
-            </div>
-        </div>
-
         <!-- Form fields -->
         <div class="form-grid">
             <div class="form-group">
@@ -55,7 +37,7 @@
                     </svg>
                     Select Budget
                 </label>
-                <select name="budget" id="budget" hx-get="/accounts" hx-target="#accounts-select" required>
+                <select name="budget" id="budget" hx-get="/accounts" hx-include="[name='account']" hx-target="#accounts-select" required>
                     <option value="">Select...</option>
                     {{range .Budgets}}
                     <option value="{{.ID}}">{{.Name}}</option>
@@ -120,7 +102,7 @@
     </form>
 </section>
 
-{{template "bank-transactions" .}}
+<div id="transactions"></div>
 
 <script>
     // Show selected file name

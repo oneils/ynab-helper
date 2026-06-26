@@ -4,106 +4,42 @@
     <p class="page-description">View and manage your imported bank transactions</p>
 </div>
 
-<section id="transactions-filter" class="filter-section">
-    <div class="filter-header">
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-        >
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-        </svg>
-        <h3>Filter Transactions</h3>
-    </div>
-
-    <div class="filter-grid">
-        <div class="form-group">
-            <label for="budget-filter">
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <path
-                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-                    ></path>
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                </svg>
-                Filter by Budget
-            </label>
-            <select
-                name="budget"
-                id="budget-filter"
-                hx-get="/accounts"
-                hx-target="#accounts-select"
-                hx-swap="outerHTML"
-                required
-            >
-                <option value="">Select Budget...</option>
-                {{range .Budgets}}
-                <option value="{{.ID}}" {{if eq $.SelectedBudget .ID}}selected{{end}}>{{.Name}}</option>
-                {{end}}
-            </select>
-        </div>
-
-        {{template "accounts-select" .}}
-
-        {{if .SelectedBudget}}
-        <div
-            hx-get="/bank-txns?budget={{.SelectedBudget}}&account=&status="
-            hx-trigger="load"
-            hx-target="#transactions"
+<div class="budget-acct-bar">
+    <div class="form-group">
+        <label for="budget-filter">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            Budget
+        </label>
+        <select
+            name="budget"
+            id="budget-filter"
+            hx-get="/accounts"
+            hx-target="#accounts-select"
             hx-swap="outerHTML"
-            style="display: none;"
-        ></div>
-        {{end}}
+            required
+        >
+            <option value="">Select Budget...</option>
+            {{range .Budgets}}
+            <option value="{{.ID}}" {{if eq $.SelectedBudget .ID}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
 
-        <div class="form-group">
-            <label for="status-filter">
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                </svg>
-                Filter by Status
-            </label>
-            <select
-                name="status"
-                id="status-filter"
-                hx-get="/bank-txns"
-                hx-target="#transactions"
-                hx-include="[name='account'], [name='budget']"
-                hx-trigger="change"
-            >
-                <option value="">All Statuses</option>
-                <option value="DRAFT">Draft</option>
-                <option value="PROCESSED">Processed</option>
-                <option value="SKIPPED">Skipped</option>
-                <option value="INVALID">Invalid</option>
-            </select>
+    {{template "accounts-select" .}}
+
+
+</div>
+
+<div class="txn-split-layout">
+    <div class="txn-list-panel">
+        <div id="txn-list-panel">
+            {{template "bank-transactions" .}}
         </div>
     </div>
-</section>
-
-{{template "bank-transactions" .}} {{end}}
+    <div id="txn-detail-panel" class="txn-detail-panel"></div>
+</div>
+{{end}}

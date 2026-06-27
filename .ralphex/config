@@ -1,3 +1,0 @@
-claude_command = external/opencode-as-claude.sh
-claude_args =
-finalize_enabled = true

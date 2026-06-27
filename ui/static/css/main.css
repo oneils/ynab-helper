@@ -1,14 +1,13 @@
 /* YNAB-Inspired Design System */
-/* Font Import */
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap");
+/* Font loaded via <head> link tag — Inter */
 
 :root {
     /* Background Colors */
-    --bg-primary: #0f1419;
-    --bg-surface: #1a1f2e;
-    --bg-elevated: #252d3d;
-    --bg-border: #323d52;
-    --bg-tertiary: #252d3d;
+    --bg-primary: #0e1117;
+    --bg-surface: #161b27;
+    --bg-elevated: #1e2535;
+    --bg-border: #2c3550;
+    --bg-tertiary: #1e2535;
 
     /* Text Colors */
     --text-primary: #e4e7eb;
@@ -20,21 +19,21 @@
     --border-color: #323d52;
 
     /* UI Colors - Interactive Elements */
-    --ui-primary: #3b82f6;
-    --ui-primary-hover: #2563eb;
-    --ui-primary-light: rgba(59, 130, 246, 0.1);
+    --ui-primary: #60a5fa;
+    --ui-primary-hover: #3b82f6;
+    --ui-primary-light: rgba(96, 165, 250, 0.1);
     --ui-secondary: #64748b;
 
-    /* Status Colors - Budget Information */
-    --status-available: #22c55e;
-    --status-available-bg: rgba(34, 197, 94, 0.2);
-    --status-warning: #f97316;
-    --status-warning-bg: rgba(249, 115, 22, 0.2);
-    --status-danger: #ef4444;
-    --status-danger-hover: #dc2626;
-    --status-danger-bg: rgba(239, 68, 68, 0.2);
-    --status-neutral: #6b7280;
-    --status-neutral-bg: rgba(107, 114, 128, 0.2);
+    /* Status Colors - pastel for dark theme readability */
+    --status-available: #4ade80;
+    --status-available-bg: rgba(74, 222, 128, 0.1);
+    --status-warning: #fbbf24;
+    --status-warning-bg: rgba(251, 191, 36, 0.1);
+    --status-danger: #f87171;
+    --status-danger-hover: #ef4444;
+    --status-danger-bg: rgba(248, 113, 113, 0.1);
+    --status-neutral: #94a3b8;
+    --status-neutral-bg: rgba(148, 163, 184, 0.1);
 
     /* Category Colors - Charts */
     --cat-bills: #6366f1;
@@ -65,7 +64,7 @@
     --radius-full: 9999px;
 
     /* Typography */
-    --font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-size-xs: 0.75rem; /* 12px */
     --font-size-sm: 0.875rem; /* 14px */
     --font-size-base: 1rem; /* 16px */
@@ -97,44 +96,49 @@ body {
     font-weight: 400;
     color: var(--text-primary);
     background: var(--bg-primary);
-    line-height: 1.6;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
 }
 
-/* App Container */
+/* App Container — centers the whole app, caps at 1680px on 4K */
 .app-container {
     display: flex;
     min-height: 100vh;
     position: relative;
+    max-width: 1680px;
+    margin: 0 auto;
+    box-shadow: 0 0 0 1px var(--bg-border);
 }
 
-/* Sidebar */
+/* Sidebar — sticky so it stays in the centered app shell */
 .sidebar {
     width: var(--sidebar-width);
-    background: var(--bg-surface);
-    border-right: 1px solid var(--bg-border);
+    min-width: var(--sidebar-width);
+    background: #111827;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     flex-direction: column;
-    position: fixed;
-    height: 100vh;
-    left: 0;
+    position: sticky;
     top: 0;
+    height: 100vh;
+    flex-shrink: 0;
     z-index: 100;
 }
 
 .sidebar-header {
     padding: var(--spacing-lg) var(--spacing-base);
-    border-bottom: 1px solid var(--bg-border);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .logo {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    font-weight: 500;
-    font-size: var(--font-size-lg);
+    font-weight: 700;
+    font-size: var(--font-size-base);
+    letter-spacing: -0.01em;
     color: var(--text-primary);
     text-decoration: none;
     cursor: pointer;
@@ -151,26 +155,29 @@ body {
     align-items: center;
     gap: var(--spacing-md);
     padding: var(--spacing-md) var(--spacing-base);
+    padding-left: calc(var(--spacing-base) + 3px); /* reserve space for active border */
     margin-bottom: var(--spacing-xs);
     color: #9ca3af;
     text-decoration: none;
     transition: all var(--transition-base);
-    font-weight: 500;
+    font-weight: 600;
     font-size: var(--font-size-sm);
     border-radius: var(--radius-md);
+    border-left: 3px solid transparent;
     position: relative;
     background: transparent;
 }
 
 .nav-item:hover {
-    background: var(--bg-elevated);
+    background: rgba(255, 255, 255, 0.05);
     color: #e5e7eb;
 }
 
 .nav-item.active {
-    background: var(--ui-primary-light);
-    color: var(--ui-primary);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.12);
+    color: #93c5fd;
+    border-left: 3px solid var(--ui-primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 .nav-item svg {
@@ -181,11 +188,11 @@ body {
 
 /* Main Wrapper */
 .main-wrapper {
-    margin-left: var(--sidebar-width);
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    min-width: 0; /* prevents flex blowout */
 }
 
 /* Main Content */
@@ -203,20 +210,22 @@ h4,
 h5,
 h6 {
     color: var(--text-primary);
-    font-weight: 500;
+    font-weight: 600;
     line-height: 1.3;
     margin-bottom: var(--spacing-base);
+    letter-spacing: -0.01em;
 }
 
 h1 {
     font-size: var(--font-size-2xl);
+    letter-spacing: -0.02em;
 }
 
 h2 {
-    font-size: var(--font-size-lg);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     color: var(--text-secondary);
 }
 
@@ -243,9 +252,7 @@ section {
     border: 1px solid var(--bg-border);
 }
 
-section:hover {
-    background: var(--bg-elevated);
-}
+/* sections are not interactive — no hover */
 
 /* Forms */
 form {
@@ -430,11 +437,11 @@ thead {
 thead th {
     padding: var(--spacing-md) var(--spacing-base);
     text-align: left;
-    font-weight: 500;
+    font-weight: 700;
     color: var(--text-secondary);
     font-size: var(--font-size-xs);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     border-bottom: 1px solid var(--bg-border);
 }
 
@@ -674,15 +681,13 @@ footer {
 
 /* Responsive Design */
 @media (max-width: 1280px) {
-    .sidebar-right {
+    /* On smaller screens hide the always-visible panel; show as overlay when open */
+    .txn-detail-panel {
         display: none;
     }
 
-    .txn-detail-panel:not(.txn-detail-panel--open) {
-        display: none !important;
-    }
-
     .txn-detail-panel.txn-detail-panel--open {
+        display: block;
         position: fixed;
         top: 0;
         right: 0;
@@ -720,10 +725,6 @@ footer {
         width: 100%;
         position: relative;
         height: auto;
-    }
-
-    .main-wrapper {
-        margin-left: 0;
     }
 
     .app-container {
@@ -765,8 +766,10 @@ footer {
 }
 
 .page-header h2 {
-    font-size: var(--font-size-2xl);
+    font-size: 1.75rem;
+    font-weight: 700;
     text-transform: none;
+    letter-spacing: -0.025em;
     color: var(--text-primary);
     margin-bottom: var(--spacing-sm);
 }
@@ -1271,8 +1274,8 @@ footer {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-sm);
-    background: var(--ui-primary);
-    color: white;
+    background: #16a34a;
+    color: #dcfce7;
     padding: var(--spacing-md) var(--spacing-xl);
     border-radius: var(--radius-md);
     border: none;
@@ -1282,7 +1285,7 @@ footer {
 }
 
 .button-primary:hover {
-    background: var(--ui-primary-hover);
+    background: #15803d;
     transform: translateY(-2px);
 }
 
@@ -1466,12 +1469,13 @@ footer {
 }
 
 .action-skip {
-    border-color: var(--status-danger);
-    color: var(--status-danger);
+    border-color: var(--text-muted);
+    color: var(--text-muted);
 }
 
 .action-skip:hover {
     background: var(--status-danger);
+    border-color: var(--status-danger);
     color: white;
 }
 
@@ -1486,9 +1490,9 @@ footer {
 }
 
 .status-badge.status-DRAFT {
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
+    background: rgba(251, 191, 36, 0.1);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.2);
 }
 
 .status-badge.status-PROCESSED {
@@ -1548,13 +1552,46 @@ footer {
     width: var(--sidebar-right-width);
     min-width: 400px;
     overflow-y: auto;
-    display: none;
+    display: block;
     background: var(--bg-surface);
     border-left: 1px solid var(--bg-border);
+    flex-shrink: 0;
 }
 
-.txn-detail-panel--open {
-    display: block;
+/* Placeholder shown when no transaction is selected */
+.txn-panel-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: var(--spacing-2xl) var(--spacing-xl);
+    text-align: center;
+    gap: var(--spacing-md);
+    user-select: none;
+    pointer-events: none;
+}
+
+.txn-panel-placeholder svg {
+    color: var(--text-muted);
+    opacity: 0.2;
+    margin-bottom: var(--spacing-sm);
+}
+
+.txn-panel-placeholder h3 {
+    color: var(--text-secondary);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0;
+}
+
+.txn-panel-placeholder p {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    margin: 0;
+    line-height: 1.6;
+    max-width: 220px;
 }
 
 /* Status Tabs */
@@ -1805,6 +1842,45 @@ footer {
     background: var(--bg-elevated);
     color: var(--text-primary);
     border-left: 4px solid var(--ui-primary);
+}
+
+/* Amount column — always right-aligned in financial tables */
+.transactions-table th:nth-child(3),
+.transactions-table td:nth-child(3) {
+    text-align: right;
+}
+
+/* Description — truncate long bank strings, tooltip shows full text */
+.txn-desc {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Status badge — tighter for table use */
+.status-badge {
+    padding: 2px 7px;
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+}
+
+/* Settings container — constrain wide-layout form pages */
+.settings-container {
+    max-width: 860px;
+}
+
+/* Tabular numbers for financial data — prevents column jitter */
+.detail-amount,
+.summary-card .amount,
+.stat-value,
+td:has(.amount-outflow),
+td:has(.amount-inflow),
+.transactions-table td:nth-child(3),
+.category-amount {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-weight: 600;
 }
 
 /* Laptop (MacBook 14" and similar) - 1440px */

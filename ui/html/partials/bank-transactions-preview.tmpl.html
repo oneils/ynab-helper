@@ -78,21 +78,19 @@
             <tbody>
                 {{range .Preview.Transactions}}
                 <tr class="{{if .ErrorMsg}}preview-row-error{{else if eq .Status "DUPLICATE"}}preview-row-duplicate{{else}}preview-row-new{{end}}">
-                    <td><small>{{.TxnTime.Format "2006-01-02"}}</small></td>
-                    <td><small>{{.Payee}}</small></td>
-                    <td><small>{{.Amount}}</small></td>
-                    <td><small>{{.Currency}}</small></td>
-                    <td><small>{{.Description}}</small></td>
+                    <td>{{.TxnTime.Format "2006-01-02"}}</td>
+                    <td>{{.Payee}}</td>
+                    <td>{{.Amount}}</td>
+                    <td>{{.Currency}}</td>
+                    <td>{{.Description}}</td>
                     <td>
-                        <small>
-                            {{if .ErrorMsg}}
-                                <span class="badge badge-error">Error</span>
-                            {{else if eq .Status "DUPLICATE"}}
-                                <span class="badge badge-warning">Duplicate</span>
-                            {{else}}
-                                <span class="badge badge-success">New</span>
-                            {{end}}
-                        </small>
+                        {{if .ErrorMsg}}
+                            <span class="badge badge-error">Error</span>
+                        {{else if eq .Status "DUPLICATE"}}
+                            <span class="badge badge-warning">Duplicate</span>
+                        {{else}}
+                            <span class="badge badge-success">New</span>
+                        {{end}}
                     </td>
                 </tr>
                 {{end}}

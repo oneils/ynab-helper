@@ -40,6 +40,35 @@
             {{template "bank-transactions" .}}
         </div>
     </div>
-    <div id="txn-detail-panel" class="txn-detail-panel"></div>
+    <div id="txn-detail-panel" class="txn-detail-panel">
+        <div class="txn-panel-placeholder">
+            <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <h3>No transaction selected</h3>
+            <p>Click any row to review details and send to YNAB</p>
+        </div>
+    </div>
 </div>
+
+<script>
+(function () {
+    var panel = document.getElementById('txn-detail-panel');
+    var placeholder = panel ? panel.innerHTML : '';
+
+    window.closeTxnDetail = function () {
+        var p = document.getElementById('txn-detail-panel');
+        if (!p) return;
+        p.classList.remove('txn-detail-panel--open');
+        p.innerHTML = placeholder;
+        document.querySelectorAll('.txn-row--selected').forEach(function (el) {
+            el.classList.remove('txn-row--selected');
+        });
+    };
+})();
+</script>
 {{end}}

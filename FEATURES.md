@@ -19,15 +19,16 @@ you can process 100+ transactions without page-per-transaction navigation.
 
 ### Split-Panel Review
 
-- **Status tabs** show per-status counts and filter the list (All / Needs Review / Accepted / Skipped / Invalid)
-- **List rows** display: Date, Description (truncated), Amount, Payee, Category, Status
+- **Filter card** (sticky at top): unified budget/account selector and status tabs — All / Needs Review / Accepted / Skipped / Invalid with per-status counts
+- **List rows** display: Date, Description (truncated), Amount, Payee, Category, Status; loaded via **infinite scroll** (HTMX sentinel row, `GET /bank-txns/rows`)
 - Rows with YNAB payee matches show an "auto" badge
-- Click a row to open the **detail panel** on the right
+- Click a row to open the **detail panel**, which is sticky and dynamically positioned below the filter card so they never overlap
 
 ### Detail Panel
 
-- Payee dropdown: pre-filled if YNAB found a matching payee via `last_used_category_id`
-- Category dropdown: same pattern — pre-filled if YNAB data exists for the payee
+- Payee `<select>`: pre-filled if YNAB found a matching payee via `last_used_category_id`
+- Category `<select>`: narrows automatically when payee changes; pre-filled from YNAB data
+- **Remember toggle**: fires `save-inline` automatically whenever both Payee and Category are filled; visually disabled (greyed out) when either field is empty
 - Actions:
   - **Accept & Send to YNAB** — posts the transaction to YNAB and marks it Accepted
   - **Save** — persists edits, keeps status as Needs Review
@@ -47,9 +48,13 @@ you can process 100+ transactions without page-per-transaction navigation.
 - **Templates**: `bank-transactions.tmpl.html` (list), `txn-detail-panel.tmpl.html` (detail), `status-tabs.tmpl.html` (tabs)
 - **CSS**: Split-panel layout in `main.css` (`.txn-split-layout`, `.txn-list-panel`, `.txn-detail-panel`)
 - **HTMX**: Row clicks load detail panel; status tabs filter via `hx-get`; action buttons update via `hx-post`
-- **Routes**: `GET /import-bank-txns` (page), `GET /bank-txns?status=` (filtered list), `GET /bank-txns/{id}/detail` (panel)
+- **Routes**: `GET /import-bank-txns` (page), `GET /bank-txns` (filtered list), `GET /bank-txns/rows` (infinite scroll batches), `GET /bank-txns/{id}/detail` (panel)
 
 ## Suggestion Engine
 
-Uses YNAB payee history (`last_used_category_id`) — no confidence scoring. It's a binary match:
-known payee → pre-fill + "auto" badge, unknown → empty dropdown.
+Two-stage fallback, no confidence scoring:
+
+1. **Learned patterns** — match bank transaction description against stored patterns; if found, pre-fill payee + category
+2. **YNAB payee name fallback** — if no pattern match, fuzzy-match the description against YNAB payee names; on hit, pre-fill payee + `last_used_category_id` category and show the "auto" badge
+
+Unknown transactions (no match in either stage) → empty dropdowns.

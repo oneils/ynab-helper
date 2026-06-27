@@ -23,7 +23,12 @@
             <!-- Sidebar Navigation -->
             <aside class="sidebar">
                 <div class="sidebar-header">
-                    <div class="logo">
+                    <a href="/"
+                       class="logo"
+                       hx-get="/"
+                       hx-target=".main-content"
+                       hx-select=".main-content"
+                       hx-push-url="true">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <rect width="24" height="24" rx="4" fill="#409FFF" />
                             <path
@@ -35,11 +40,15 @@
                             />
                         </svg>
                         <span>YNAB Helper</span>
-                    </div>
+                    </a>
                 </div>
 
                 <nav class="sidebar-nav">
-                    <a href="/" class="nav-item">
+                    <a href="/" class="nav-item"
+                       hx-get="/"
+                       hx-target=".main-content"
+                       hx-select=".main-content"
+                       hx-push-url="true">
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                             <path
                                 d="M10 3L10 10M10 3L6 7M10 3L14 7"
@@ -57,7 +66,11 @@
                         </svg>
                         <span>Import from Bank</span>
                     </a>
-                    <a href="/import-bank-txns" class="nav-item">
+                    <a href="/import-bank-txns" class="nav-item"
+                       hx-get="/import-bank-txns"
+                       hx-target=".main-content"
+                       hx-select=".main-content"
+                       hx-push-url="true">
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                             <rect x="3" y="4" width="14" height="12" rx="1" stroke="currentColor" stroke-width="1.5" />
                             <path
@@ -69,7 +82,11 @@
                         </svg>
                         <span>Import History</span>
                     </a>
-                    <a href="/settings" class="nav-item">
+                    <a href="/settings" class="nav-item"
+                       hx-get="/settings"
+                       hx-target=".main-content"
+                       hx-select=".main-content"
+                       hx-push-url="true">
                         <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
                             <path
                                 d="M58 12.5 L50 16.25 L46 12.125 L49.5 4.063 C39.5 4.063 37 9 37 14 V18 L3.5 52 L1.75 58 L3.875 60 L9.938 58.5 L44 25 H48 C53 25 58 22.5 58 12.5Z"
@@ -115,7 +132,11 @@
 
                         <span>Settings</span>
                     </a>
-                    <a href="/about" class="nav-item">
+                    <a href="/about" class="nav-item"
+                       hx-get="/about"
+                       hx-target=".main-content"
+                       hx-select=".main-content"
+                       hx-push-url="true">
                         <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
                             <circle cx="32" cy="32" r="26" stroke="currentColor" stroke-width="1.5" />
                             <circle cx="32" cy="20" r="2" fill="currentColor" />

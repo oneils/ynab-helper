@@ -1,79 +1,114 @@
 # ynab-helper
 
-![Build Status](https://github.com/oneils/ynab-helper/actions/workflows/docker-image.yml/badge.svg)
+![Build Status](https://github.com/oneils/ynab-helper/actions/workflows/ci.yml/badge.svg)
 
-Tool for processing reported from different bank accounts and exporting them to YNAB app.
+A self-hosted web app that imports CSV transaction exports from Polish banks directly into [YNAB](https://www.youneedabudget.com/), without relying on third-party bank sync partners.
 
-Supported reported from the following Banks:
+**Why?** Polish banks (Santander PL, PKO, Revolut) are not supported by YNAB's native sync. Third-party integrations require sharing banking credentials with an external service. This tool keeps your data local: export a CSV from your bank, upload it here, review, confirm — done.
+
+## Supported banks
 
 - [x] Santander Polska
 - [x] Revolut
 - [x] PKO
 - [ ] ING
+- [ ] Millennium
+
+## How it works
+
+1. Export a transaction CSV from your bank's web interface
+2. In ynab-helper, select your YNAB budget and account, upload the CSV
+3. Review the preview — new vs. duplicate transactions are highlighted
+4. Confirm the import; transactions are pushed to YNAB
+
+The app deduplicates by SHA-256 hash of each CSV line, so re-uploading the same file or an overlapping export is safe.
+
+> **Account naming matters.** The parser is selected by checking whether your YNAB account name *contains* the bank name (case-insensitive). An account named `PKO Something` or `My Santander` works fine — as long as `pko` or `santander` appears somewhere in the name.
+
+## Prerequisites
+
+- A [YNAB Personal Access Token](https://api.youneedabudget.com/#authentication-overview) (Settings → Developer Settings → New Token)
+- Docker (recommended) or Go 1.25+
+
+## Quick start
+
+```bash
+git clone https://github.com/oneils/ynab-helper.git
+cd ynab-helper
+cp .env.example .env        # then fill in YNAB_TOKEN
+docker compose up
+```
+
+Open [http://localhost:8080](http://localhost:8080).
+
+> No `.env.example` yet? Create `.env` with at minimum:
+> ```
+> YNAB_TOKEN=your_token_here
+> ```
+
+## Running locally (without Docker)
+
+```bash
+YNAB_TOKEN=your_token make run
+```
+
+The dev server starts on `:5002`.
+
+## Configuration
+
+All options can be set as environment variables or CLI flags.
+
+| Env var | Flag | Default | Description |
+|---|---|---|---|
+| `YNAB_TOKEN` | `--ynab-token` | — | YNAB Personal Access Token (**required**) |
+| `ADDR` | `--addr` | `:8080` | HTTP listen address |
+| `YNAB_API` | `--ynab-api` | `https://api.youneedabudget.com/v1` | YNAB API base URL |
+| `SYNC_INTERVAL` | `--sync-interval` | `1h` | How often to automatically sync YNAB data (budgets, accounts, payees, categories) |
+| `SQLITE_DB_PATH` | `--sqlite-path` | `./data/ynab.db` | SQLite database file path |
 
 ## Database
 
-The application uses SQLite with SQL migrations for data storage.
+SQLite with automatic migrations on startup.
 
-### Tables
+| Table | Contents |
+|---|---|
+| `transactions` | Imported bank transactions |
+| `budgets` | Budgets synced from YNAB |
+| `accounts` | YNAB accounts |
+| `category_groups` | YNAB category groups |
+| `categories` | YNAB categories |
+| `payees` | YNAB payees |
+| `sync_history` | Last sync timestamps per entity type |
 
-- `transactions` - stores successfully imported/processed transactions from the Bank's report files
-- `budgets` - stores budgets imported from YNAB
-- `accounts` - stores YNAB accounts associated with budgets
-- `category_groups` - stores YNAB category groups
-- `categories` - stores YNAB categories
-- `payees` - stores YNAB payees
-- `sync_history` - stores YNAB sync history (e.g. last sync date and which entities were synced)
+## Transaction statuses
 
-## Transaction record example
+| Status | Meaning |
+|---|---|
+| `DRAFT` | Imported from CSV, not yet pushed to YNAB |
+| `PROCESSED` | Successfully pushed to YNAB |
+| `SKIPPED` | Manually skipped |
+| `INVALID` | Could not be parsed |
 
-```json
-{
-    "id": "229102766bfb459f6503426598c47f7285cf2daf",
-    "amount": 100.00,
-    "currency": "PLN",
-    "description": "Transaction description",
-    "payee": "Payee name",
-    "account_id": "account123",
-    "account_name": "Santander",
-    "status": "PROCESSED",
-    "created_at": "2014-01-01T12:00:00Z",
-    "txn_time": "2014-01-01T12:00:00Z",
-    "raw_text": "Original CSV line",
-    "raw_line_number": 5,
-    "error_msg": null
-}
-```
-
-Fields description:
-
-- `id` - SHA1 hash of the whole line from the CSV report. Used for duplicate verification
-- `account_name` - from which account a record was exported (e.g. `Santander` or `Revolut`)
-- `status` - transaction status: `DRAFT`, `SKIPPED`, `PROCESSED`, or `INVALID`
-- `account_id` - YNAB account ID for the transaction
-- `txn_time` - transaction date and time
-
-
-## How to run
+## Development
 
 ```bash
-env YNAB_TOKEN=token \
-    YNAB_API=https://api.youneedabudget.com/v1 \
-    DB_PATH=./ynab-helper.db \
-    go run app/main.go
+make check      # fmt + vet + lint + test
+make test       # tests with race detector and coverage
+make build      # cross-compile for linux/amd64 → target/ynab-helper
+make docker     # build Docker image locally
 ```
 
-The application will automatically run SQL migrations on startup to create/update the database schema.
-
-## Generate mocks
+Regenerate mocks after changing interfaces in `internal/parser`:
 
 ```bash
-go generate ./app/...
+go generate ./internal/parser/...
 ```
 
-## Create a new release
+## Create a release
 
 ```bash
-git tag -a v0.0.2 -m "Release v0.0.2"
-git push origin v0.0.2
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
 ```
+
+CI builds and pushes multi-arch Docker images to Docker Hub and GHCR on every tag.

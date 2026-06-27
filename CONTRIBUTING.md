@@ -1,0 +1,53 @@
+# Contributing
+
+## Prerequisites
+
+- Go 1.25+
+- Make
+
+## Running locally
+
+```bash
+cp .env.example .env   # fill in YNAB_TOKEN at minimum
+make run               # starts the dev server on :8080
+```
+
+## Running tests and linter
+
+```bash
+make check   # runs golangci-lint + all tests
+make test    # tests only
+make lint    # linter only
+```
+
+All tests must pass and the linter must be clean before submitting a PR.
+
+## Adding a new bank parser
+
+Each bank has its own parser file under `internal/parser/`. Look at `pko.go`, `revolut.go`, or `santander.go` for the pattern:
+
+1. Create `internal/parser/<bank>.go` implementing the `Parser` interface
+2. Add a `_test.go` file with unit tests using synthetic CSV rows
+3. Register the parser in `internal/parser/parser.go`
+
+Use clearly fictional data in tests — no real account numbers, transaction references, or balances.
+
+## Commit conventions
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat(parser): add ING bank parser
+fix(ui): correct amount formatting for negative values
+docs: update README with new env vars
+```
+
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+
+See `.gitmessage` for the full reference.
+
+## Pull requests
+
+- Keep PRs focused — one logical change per PR
+- Reference related issues if applicable
+- CI must pass (build + lint + tests)

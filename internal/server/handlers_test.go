@@ -369,6 +369,64 @@ func TestDetailRouteNotFound_InlineRoutesRemoved(t *testing.T) {
 	}
 }
 
+func TestPayeeNameByID(t *testing.T) {
+	payees := []ynab.Payee{
+		{ID: "p1", Name: "Amazon"},
+		{ID: "p2", Name: "Netflix"},
+		{ID: "p3", Name: "Spotify"},
+	}
+
+	tests := []struct {
+		name   string
+		payees []ynab.Payee
+		id     string
+		want   string
+	}{
+		{name: "match found", payees: payees, id: "p2", want: "Netflix"},
+		{name: "no match", payees: payees, id: "p99", want: ""},
+		{name: "empty slice", payees: nil, id: "p1", want: ""},
+		{name: "empty id", payees: payees, id: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := payeeNameByID(tt.payees, tt.id)
+			if got != tt.want {
+				t.Errorf("payeeNameByID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCategoryNameByID(t *testing.T) {
+	categories := []ynab.Category{
+		{ID: "c1", Name: "Groceries"},
+		{ID: "c2", Name: "Rent"},
+		{ID: "c3", Name: "Utilities"},
+	}
+
+	tests := []struct {
+		name       string
+		categories []ynab.Category
+		id         string
+		want       string
+	}{
+		{name: "match found", categories: categories, id: "c1", want: "Groceries"},
+		{name: "no match", categories: categories, id: "c99", want: ""},
+		{name: "empty slice", categories: nil, id: "c1", want: ""},
+		{name: "empty id", categories: categories, id: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := categoryNameByID(tt.categories, tt.id)
+			if got != tt.want {
+				t.Errorf("categoryNameByID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDetailRoute_SaveInlineStillExists(t *testing.T) {
 	s := &Server{}
 

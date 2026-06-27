@@ -31,6 +31,7 @@
     --status-warning: #f97316;
     --status-warning-bg: rgba(249, 115, 22, 0.2);
     --status-danger: #ef4444;
+    --status-danger-hover: #dc2626;
     --status-danger-bg: rgba(239, 68, 68, 0.2);
     --status-neutral: #6b7280;
     --status-neutral-bg: rgba(107, 114, 128, 0.2);
@@ -74,7 +75,7 @@
 
     /* Layout */
     --sidebar-width: 256px;
-    --sidebar-right-width: 288px;
+    --sidebar-right-width: 400px;
 
     /* Transitions */
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -390,7 +391,7 @@ button.danger,
 
 button.danger:hover,
 .button.danger:hover {
-    background: #dc2626;
+    background: var(--status-danger-hover);
 }
 
 /* Success Button */
@@ -529,14 +530,6 @@ progress[value="100"]::-moz-progress-bar {
 }
 
 /* Status Badges */
-.badge {
-    display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-md);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-}
-
 .badge-available {
     background: var(--status-available-bg);
     color: var(--status-available);
@@ -760,6 +753,9 @@ footer {
 }
 
 .page-header h2 {
+    font-size: var(--font-size-2xl);
+    text-transform: none;
+    color: var(--text-primary);
     margin-bottom: var(--spacing-sm);
 }
 
@@ -767,6 +763,43 @@ footer {
     color: var(--text-secondary);
     font-size: var(--font-size-base);
     margin-bottom: 0;
+}
+
+/* Settings Cards */
+.settings-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--bg-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.settings-card h3 {
+    margin-bottom: var(--spacing-xs);
+}
+
+.settings-card .card-description {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.settings-card .card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--bg-border);
+}
+
+.settings-card--flush {
+    padding: 0;
+    overflow: hidden;
+}
+
+.settings-budget-selector {
+    margin-bottom: var(--spacing-lg);
 }
 
 /* Import Form Styles */
@@ -1501,7 +1534,7 @@ footer {
 
 .txn-detail-panel {
     width: var(--sidebar-right-width);
-    min-width: 320px;
+    min-width: 400px;
     overflow-y: auto;
     display: none;
     background: var(--bg-surface);
@@ -1661,12 +1694,29 @@ footer {
     box-shadow: 0 0 0 2px var(--ui-primary-light);
 }
 
+.detail-empty-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: var(--spacing-xs) 0;
+}
+
 .detail-actions {
     display: flex;
-    gap: var(--spacing-md);
+    flex-direction: column;
+    gap: var(--spacing-sm);
     margin-top: var(--spacing-xl);
     padding-top: var(--spacing-lg);
     border-top: 1px solid var(--bg-border);
+}
+
+.detail-actions button {
+    width: 100%;
+}
+
+.detail-actions .button-primary,
+.detail-actions .button-secondary {
+    display: flex;
+    justify-content: center;
 }
 
 .auto-filled-hint {

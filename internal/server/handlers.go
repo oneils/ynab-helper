@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -84,10 +85,13 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 	budgetID := r.URL.Query().Get("budget")
 	accountID := r.URL.Query().Get("account")
 
+	page, limit := parsePagination(r)
+
 	data := struct {
 		Budgets        []ynab.Budget
 		Accs           []ynab.Account
 		Txns           []TxnListRow
+		PageMeta       PageMeta
 		SelectedBudget string
 		Budget         string
 		Account        string
@@ -124,7 +128,7 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 			Status:    activeStatus,
 		})
 		if err == nil {
-			data.Txns = enrichTransactionList(r.Context(), txns,
+			rows := enrichTransactionList(r.Context(), txns,
 				s.Syncer.FindBudgetByAccID,
 				func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
 					return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
@@ -135,6 +139,17 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 				s.Syncer.FetchPayeesByBudget,
 				s.TxnProcessor.SuggestPayee,
 			)
+			pm := newPageMeta(page, limit, len(rows))
+			start := (pm.Page - 1) * pm.Limit
+			end := start + pm.Limit
+			if start > len(rows) {
+				start = len(rows)
+			}
+			if end > len(rows) {
+				end = len(rows)
+			}
+			data.Txns = rows[start:end]
+			data.PageMeta = pm
 		}
 
 		// Fetch status counts
@@ -211,10 +226,68 @@ type TxnListRow struct {
 	AutoFilled  bool   // true if either field was pre-filled
 }
 
-func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
+// PageMeta holds pagination state for transaction list views.
+type PageMeta struct {
+	Page       int
+	PrevPage   int // 0 when on the first page (disables Prev button)
+	NextPage   int // 0 when on the last page (disables Next button)
+	Limit      int
+	Total      int
+	TotalPages int
+}
+
+// parsePagination reads page and limit from the request, applying defaults and clamping.
+func parsePagination(r *http.Request) (page, limit int) {
+	page = 1
+	limit = 20
+	if p := r.URL.Query().Get("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v >= 1 {
+			page = v
+		}
+	}
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v >= 1 {
+			limit = v
+		}
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	return page, limit
+}
+
+func newPageMeta(page, limit, total int) PageMeta {
+	totalPages := (total + limit - 1) / limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	prev := 0
+	if page > 1 {
+		prev = page - 1
+	}
+	next := 0
+	if page < totalPages {
+		next = page + 1
+	}
+	return PageMeta{
+		Page:       page,
+		PrevPage:   prev,
+		NextPage:   next,
+		Limit:      limit,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+}
+
+// bankTxnRowsHandler returns only <tr> rows for the infinite scroll sentinel.
+func (s *Server) bankTxnRowsHandler(w http.ResponseWriter, r *http.Request) {
 	budgetID := r.URL.Query().Get("budget")
 	accountID := r.URL.Query().Get("account")
 	status := r.URL.Query().Get("status")
+	page, limit := parsePagination(r)
 
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  budgetID,
@@ -238,6 +311,73 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		s.TxnProcessor.SuggestPayee,
 	)
 
+	pm := newPageMeta(page, limit, len(rows))
+	start := (pm.Page - 1) * pm.Limit
+	end := start + pm.Limit
+	if start > len(rows) {
+		start = len(rows)
+	}
+	if end > len(rows) {
+		end = len(rows)
+	}
+
+	data := struct {
+		Txns         []TxnListRow
+		PageMeta     PageMeta
+		Budget       string
+		Account      string
+		ActiveStatus string
+		StatusCounts map[string]int
+	}{
+		Txns:         rows[start:end],
+		PageMeta:     pm,
+		Budget:       budgetID,
+		Account:      accountID,
+		ActiveStatus: status,
+	}
+
+	s.render(w, http.StatusOK, "import-txns.tmpl.html", "txn-rows", data)
+}
+
+func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
+	budgetID := r.URL.Query().Get("budget")
+	accountID := r.URL.Query().Get("account")
+	status := r.URL.Query().Get("status")
+	page, limit := parsePagination(r)
+
+	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
+		BudgetID:  budgetID,
+		AccountID: accountID,
+		Status:    status,
+	})
+	if err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		return
+	}
+
+	rows := enrichTransactionList(r.Context(), txns,
+		s.Syncer.FindBudgetByAccID,
+		func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+			return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+		},
+		func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+			return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+		},
+		s.Syncer.FetchPayeesByBudget,
+		s.TxnProcessor.SuggestPayee,
+	)
+
+	pm := newPageMeta(page, limit, len(rows))
+	start := (pm.Page - 1) * pm.Limit
+	end := start + pm.Limit
+	if start > len(rows) {
+		start = len(rows)
+	}
+	if end > len(rows) {
+		end = len(rows)
+	}
+	rows = rows[start:end]
+
 	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accountID)
 	if err != nil {
 		slog.Error("failed to count transactions by status", "error", err)
@@ -250,12 +390,14 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		Txns         []TxnListRow
+		PageMeta     PageMeta
 		Budget       string
 		Account      string
 		ActiveStatus string
 		StatusCounts map[string]int
 	}{
 		Txns:         rows,
+		PageMeta:     pm,
 		Budget:       budgetID,
 		Account:      accountID,
 		ActiveStatus: status,

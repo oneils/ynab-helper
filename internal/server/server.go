@@ -44,6 +44,7 @@ func (s *Server) routes() chi.Router {
 
 		router.Route("/bank-txns", func(r chi.Router) {
 			r.Get("/", s.bankTxnsHandler)
+			r.Get("/rows", s.bankTxnRowsHandler)
 			r.Get("/{id}/detail", s.detailBankTxnHandler)
 			r.Post("/{id}/skip", s.skipBankTxnHandler)
 

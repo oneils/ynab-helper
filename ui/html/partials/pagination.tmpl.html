@@ -1,0 +1,35 @@
+{{define "pagination"}}
+{{if gt .PageMeta.TotalPages 1}}
+<div class="pagination">
+    {{if .PageMeta.PrevPage}}
+    <button
+        class="pagination-btn"
+        hx-get="/bank-txns"
+        hx-vals='{"page": "{{.PageMeta.PrevPage}}", "limit": "{{.PageMeta.Limit}}", "budget": "{{.Budget}}", "account": "{{.Account}}", "status": "{{.ActiveStatus}}"}'
+        hx-target="#txn-list-panel"
+        hx-swap="innerHTML"
+    >
+        &larr; Previous
+    </button>
+    {{else}}
+    <button class="pagination-btn" disabled>&larr; Previous</button>
+    {{end}}
+
+    <span class="pagination-info">Page {{.PageMeta.Page}} of {{.PageMeta.TotalPages}} &middot; {{.PageMeta.Total}} transactions</span>
+
+    {{if .PageMeta.NextPage}}
+    <button
+        class="pagination-btn"
+        hx-get="/bank-txns"
+        hx-vals='{"page": "{{.PageMeta.NextPage}}", "limit": "{{.PageMeta.Limit}}", "budget": "{{.Budget}}", "account": "{{.Account}}", "status": "{{.ActiveStatus}}"}'
+        hx-target="#txn-list-panel"
+        hx-swap="innerHTML"
+    >
+        Next &rarr;
+    </button>
+    {{else}}
+    <button class="pagination-btn" disabled>Next &rarr;</button>
+    {{end}}
+</div>
+{{end}}
+{{end}}

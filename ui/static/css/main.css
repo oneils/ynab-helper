@@ -102,12 +102,12 @@ body {
     overflow-x: hidden;
 }
 
-/* App Container — centers the whole app, caps at 1680px on 4K */
+/* App Container — centers the whole app */
 .app-container {
     display: flex;
     min-height: 100vh;
     position: relative;
-    max-width: 1680px;
+    max-width: 1920px;
     margin: 0 auto;
     box-shadow: 0 0 0 1px var(--bg-border);
 }
@@ -1534,18 +1534,50 @@ footer {
     margin-bottom: 0;
 }
 
+/* Filter Card — unified Budget/Account/Status block, sticky */
+.filter-card {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-surface);
+    border: 1px solid var(--bg-border);
+    border-radius: var(--radius-md);
+    padding: 0;
+    overflow: hidden;
+    margin-bottom: var(--spacing-base);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.filter-card .budget-acct-bar {
+    padding: 16px 20px 14px;
+}
+
+.filter-card .status-tabs {
+    padding: 0 20px;
+    border-top: 1px solid var(--bg-border);
+    border-bottom: none;
+    background: transparent;
+}
+
 /* ==================== Split Panel Layout ==================== */
 
 .txn-split-layout {
     display: flex;
-    height: calc(100vh - 7rem);
-    overflow: hidden;
+    align-items: flex-start;
 }
 
 .txn-list-panel {
     flex: 1;
-    overflow-y: auto;
+    min-width: 0;
     border-right: 1px solid var(--bg-border);
+}
+
+#txn-list-panel {
+    /* natural height — infinite scroll grows the table */
+}
+
+.txn-table-scroll {
+    overflow-x: auto;
 }
 
 .txn-detail-panel {
@@ -1556,6 +1588,10 @@ footer {
     background: var(--bg-surface);
     border-left: 1px solid var(--bg-border);
     flex-shrink: 0;
+    position: sticky;
+    top: 0; /* overridden by JS to sit below the sticky filter card */
+    max-height: 100vh;
+    align-self: flex-start;
 }
 
 /* Placeholder shown when no transaction is selected */
@@ -1564,7 +1600,7 @@ footer {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100%;
+    min-height: 400px;
     padding: var(--spacing-2xl) var(--spacing-xl);
     text-align: center;
     gap: var(--spacing-md);
@@ -1647,6 +1683,55 @@ footer {
 .status-tab--active .status-tab-count {
     background: rgba(255, 255, 255, 0.2);
     color: white;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-base);
+    border-top: 1px solid var(--bg-border);
+}
+
+.pagination-btn {
+    padding: var(--spacing-xs) var(--spacing-md);
+    min-height: 32px;
+    font-size: var(--font-size-sm);
+    background: transparent;
+    color: var(--ui-primary);
+    border: 1px solid var(--ui-primary);
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: var(--ui-primary);
+    color: white;
+}
+
+.pagination-btn:disabled {
+    color: var(--text-muted);
+    border-color: var(--bg-border);
+    opacity: 0.5;
+}
+
+.pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Infinite scroll sentinel row */
+.txn-load-sentinel-cell {
+    text-align: center;
+    padding: var(--spacing-md);
+    height: 1px;
+    overflow: hidden;
+}
+
+.txn-load-spinner {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
 }
 
 /* Auto-Filled Badge */

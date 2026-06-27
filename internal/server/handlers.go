@@ -1146,6 +1146,13 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 		TxnDate:    r.PostForm.Get("txnDate"),
 	}
 
+	if form.PayeeID == "" || form.CategoryID == "" {
+		w.Header().Set("HX-Trigger", `{"showToast": {"message": "Select both a payee and category to remember selections", "type": "warning"}}`)
+		w.Header().Set("HX-Reswap", "none")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Update payee's last category for future suggestions
 	if form.PayeeID != "" && form.CategoryID != "" {
 		if err := s.Syncer.UpdatePayeeLastCategory(r.Context(), form.PayeeID, form.CategoryID); err != nil {

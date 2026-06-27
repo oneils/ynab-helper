@@ -20,48 +20,30 @@
         <input type="hidden" name="amount" value="{{.Txn.Amount}}">
 
         <div class="detail-field">
-            <label for="detail-payee-input" class="detail-label">Payee</label>
+            <label for="detail-payee-select" class="detail-label">Payee</label>
             {{if not .Payees}}
             <p class="detail-empty-hint">No payees &mdash; sync from <a href="/settings">Settings &rarr; Sync Payees</a> first.</p>
             {{else}}
-            <input
-                type="text"
-                id="detail-payee-input"
-                class="detail-autocomplete"
-                list="detail-payees-list"
-                placeholder="Type to search payee&hellip;"
-                value="{{.SugPayeeName}}"
-                autocomplete="off"
-            >
-            <datalist id="detail-payees-list">
+            <select id="detail-payee-select" name="payee" class="detail-select">
+                <option value="">&#8212; Select payee &#8212;</option>
                 {{range .Payees}}
-                <option value="{{.Name}}" data-id="{{.ID}}"></option>
+                <option value="{{.ID}}"{{if eq .ID $.SugPayeeID}} selected{{end}}>{{.Name}}</option>
                 {{end}}
-            </datalist>
-            <input type="hidden" id="detail-payee-id" name="payee" value="{{.SugPayeeID}}">
+            </select>
             {{end}}
         </div>
 
         <div class="detail-field">
-            <label for="detail-category-input" class="detail-label">Category</label>
+            <label for="detail-category-select" class="detail-label">Category</label>
             {{if not .Categories}}
             <p class="detail-empty-hint">No categories &mdash; sync from <a href="/settings">Settings &rarr; Sync Categories</a> first.</p>
             {{else}}
-            <input
-                type="text"
-                id="detail-category-input"
-                class="detail-autocomplete"
-                list="detail-categories-list"
-                placeholder="Type to search category&hellip;"
-                value="{{.SugCategoryName}}"
-                autocomplete="off"
-            >
-            <datalist id="detail-categories-list">
+            <select id="detail-category-select" name="category" class="detail-select">
+                <option value="">&#8212; Select category &#8212;</option>
                 {{range .Categories}}
-                <option value="{{.Name}}" data-id="{{.ID}}"></option>
+                <option value="{{.ID}}"{{if eq .ID $.SugCategoryID}} selected{{end}}>{{.Name}}</option>
                 {{end}}
-            </datalist>
-            <input type="hidden" id="detail-category-id" name="category" value="{{.SugCategoryID}}">
+            </select>
             {{end}}
         </div>
 
@@ -83,16 +65,17 @@
         >
             Accept &amp; Send to YNAB
         </button>
-        <button type="button"
-            class="button-secondary"
-            hx-post="/bank-txns/{{.Txn.ID}}/save-inline?status={{.ActiveStatus}}"
-            hx-include="#detail-form"
-            hx-target="#txn-list-panel"
-            hx-swap="innerHTML"
-            hx-on::after-request="if(window.closeTxnDetail) window.closeTxnDetail()"
-        >
-            Remember Selections
-        </button>
+        <label class="remember-toggle-row">
+            <input type="checkbox"
+                class="remember-checkbox"
+                hx-post="/bank-txns/{{.Txn.ID}}/save-inline?status={{.ActiveStatus}}"
+                hx-include="#detail-form"
+                hx-target="#txn-list-panel"
+                hx-swap="innerHTML"
+                hx-trigger="change[this.checked]">
+            <span class="toggle-track"></span>
+            <span class="toggle-label-text">Remember Selections</span>
+        </label>
         <button type="button"
             class="button danger"
             hx-post="/bank-txns/{{.Txn.ID}}/skip?accId={{.Txn.Account.ID}}&status={{.ActiveStatus}}"

@@ -41,11 +41,6 @@ docker compose up
 
 Open [http://localhost:8080](http://localhost:8080).
 
-> No `.env.example` yet? Create `.env` with at minimum:
-> ```
-> YNAB_TOKEN=your_token_here
-> ```
-
 ## Running locally (without Docker)
 
 ```bash

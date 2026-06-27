@@ -4,34 +4,36 @@
     <p class="page-description">View and manage your imported bank transactions</p>
 </div>
 
-<div class="budget-acct-bar">
-    <div class="form-group">
-        <label for="budget-filter">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-            </svg>
-            Budget
-        </label>
-        <select
-            name="budget"
-            id="budget-filter"
-            hx-get="/accounts"
-            hx-target="#accounts-select"
-            hx-swap="outerHTML"
-            required
-        >
-            <option value="">Select Budget...</option>
-            {{range .Budgets}}
-            <option value="{{.ID}}" {{if eq $.SelectedBudget .ID}}selected{{end}}>{{.Name}}</option>
-            {{end}}
-        </select>
+<div class="filter-card">
+    <div class="budget-acct-bar">
+        <div class="form-group">
+            <label for="budget-filter">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                Budget
+            </label>
+            <select
+                name="budget"
+                id="budget-filter"
+                hx-get="/accounts"
+                hx-target="#accounts-select"
+                hx-swap="outerHTML"
+                required
+            >
+                <option value="">Select Budget...</option>
+                {{range .Budgets}}
+                <option value="{{.ID}}" {{if eq $.SelectedBudget .ID}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </select>
+        </div>
+
+        {{template "accounts-select" .}}
     </div>
 
-    {{template "accounts-select" .}}
-
-
+    {{template "status-tabs" .}}
 </div>
 
 <div class="txn-split-layout">
@@ -69,6 +71,20 @@
             el.classList.remove('txn-row--selected');
         });
     };
+
+    // Keep detail panel top aligned with sticky filter card
+    var filterCard = document.querySelector('.filter-card');
+    var detailPanel = document.getElementById('txn-detail-panel');
+    function syncDetailTop() {
+        if (!filterCard || !detailPanel) return;
+        var h = filterCard.offsetHeight;
+        detailPanel.style.top = h + 'px';
+        detailPanel.style.maxHeight = 'calc(100vh - ' + h + 'px)';
+    }
+    syncDetailTop();
+    if (window.ResizeObserver) {
+        new ResizeObserver(syncDetailTop).observe(filterCard);
+    }
 })();
 </script>
 {{end}}

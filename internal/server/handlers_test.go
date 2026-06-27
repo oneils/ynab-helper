@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -647,5 +648,121 @@ func TestApplyYnabPayeeFallback_NoMatchReturnsEmpty(t *testing.T) {
 	}
 	if catID != "" {
 		t.Errorf("expected empty catID on no match, got '%s'", catID)
+	}
+}
+
+func TestParsePagination_Defaults(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns", nil)
+	page, limit := parsePagination(req)
+	if page != 1 {
+		t.Errorf("expected default page=1, got %d", page)
+	}
+	if limit != 20 {
+		t.Errorf("expected default limit=20, got %d", limit)
+	}
+}
+
+func TestParsePagination_ValidValues(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?page=3&limit=25", nil)
+	page, limit := parsePagination(req)
+	if page != 3 {
+		t.Errorf("expected page=3, got %d", page)
+	}
+	if limit != 25 {
+		t.Errorf("expected limit=25, got %d", limit)
+	}
+}
+
+func TestParsePagination_PageLessThanOne(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?page=0", nil)
+	page, _ := parsePagination(req)
+	if page != 1 {
+		t.Errorf("expected page clamped to default 1 for page=0, got %d", page)
+	}
+}
+
+func TestParsePagination_NegativePage(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?page=-5", nil)
+	page, _ := parsePagination(req)
+	if page != 1 {
+		t.Errorf("expected page clamped to default 1 for page=-5, got %d", page)
+	}
+}
+
+func TestParsePagination_LimitExceedsMax(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?limit=500", nil)
+	_, limit := parsePagination(req)
+	if limit != 200 {
+		t.Errorf("expected limit clamped to 200 for limit=500, got %d", limit)
+	}
+}
+
+func TestParsePagination_LimitAtMax(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?limit=200", nil)
+	_, limit := parsePagination(req)
+	if limit != 200 {
+		t.Errorf("expected limit=200 to be accepted, got %d", limit)
+	}
+}
+
+func TestParsePagination_InvalidPageString(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?page=abc", nil)
+	page, _ := parsePagination(req)
+	if page != 1 {
+		t.Errorf("expected default page=1 for invalid page string, got %d", page)
+	}
+}
+
+func TestParsePagination_InvalidLimitString(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?limit=xyz", nil)
+	_, limit := parsePagination(req)
+	if limit != 20 {
+		t.Errorf("expected default limit=20 for invalid limit string, got %d", limit)
+	}
+}
+
+func TestNewPageMeta_SinglePage(t *testing.T) {
+	pm := newPageMeta(1, 50, 30)
+	if pm.TotalPages != 1 {
+		t.Errorf("expected TotalPages=1 for 30 items / limit 50, got %d", pm.TotalPages)
+	}
+	if pm.PrevPage != 0 {
+		t.Errorf("expected PrevPage=0 on first page, got %d", pm.PrevPage)
+	}
+	if pm.NextPage != 0 {
+		t.Errorf("expected NextPage=0 on last page, got %d", pm.NextPage)
+	}
+}
+
+func TestNewPageMeta_MultiPage(t *testing.T) {
+	pm := newPageMeta(2, 50, 120)
+	if pm.TotalPages != 3 {
+		t.Errorf("expected TotalPages=3 for 120 items / limit 50, got %d", pm.TotalPages)
+	}
+	if pm.PrevPage != 1 {
+		t.Errorf("expected PrevPage=1, got %d", pm.PrevPage)
+	}
+	if pm.NextPage != 3 {
+		t.Errorf("expected NextPage=3, got %d", pm.NextPage)
+	}
+	if pm.Total != 120 {
+		t.Errorf("expected Total=120, got %d", pm.Total)
+	}
+}
+
+func TestNewPageMeta_PageClamped(t *testing.T) {
+	pm := newPageMeta(99, 50, 60)
+	if pm.Page != 2 {
+		t.Errorf("expected page clamped to TotalPages=2 for page=99, got %d", pm.Page)
+	}
+}
+
+func TestNewPageMeta_ZeroTotal(t *testing.T) {
+	pm := newPageMeta(1, 50, 0)
+	if pm.TotalPages != 1 {
+		t.Errorf("expected TotalPages=1 for empty result, got %d", pm.TotalPages)
+	}
+	if pm.PrevPage != 0 || pm.NextPage != 0 {
+		t.Errorf("expected no prev/next for empty result, got prev=%d next=%d", pm.PrevPage, pm.NextPage)
 	}
 }

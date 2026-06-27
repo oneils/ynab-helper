@@ -1,0 +1,62 @@
+{{define "txn-rows"}}
+{{range $row := .Txns}}
+<tr id="txn-row-{{$row.Txn.ID}}"
+    class="txn-row"
+    data-txn-id="{{$row.Txn.ID}}"
+    hx-get="/bank-txns/{{$row.Txn.ID}}/detail?account={{$row.Txn.Account.ID}}"
+    hx-target="#txn-detail-panel"
+    hx-swap="innerHTML"
+    hx-on::after-request="document.querySelectorAll('.txn-row--selected').forEach(function(el){el.classList.remove('txn-row--selected')}); this.classList.add('txn-row--selected'); document.getElementById('txn-detail-panel').classList.add('txn-detail-panel--open')"
+>
+    <td>{{$row.Txn.TxnTime.Format "2006-01-02"}}</td>
+    <td class="txn-desc" title="{{$row.Txn.Description}}">{{$row.Txn.Description}}</td>
+    <td>{{$row.Txn.Amount}}</td>
+    <td>
+        {{if $row.SugPayee}}
+        {{$row.SugPayee}}
+        {{if $row.AutoFilled}}<span class="auto-filled-badge">auto</span>{{end}}
+        {{else}}
+        {{$row.Txn.Payee}}
+        {{end}}
+    </td>
+    <td>
+        {{if $row.SugCategory}}
+        {{$row.SugCategory}}
+        {{if $row.AutoFilled}}<span class="auto-filled-badge">auto</span>{{end}}
+        {{else}}
+        <span class="text-muted">&mdash;</span>
+        {{end}}
+    </td>
+    <td><span class="status-badge status-{{$row.Txn.Status}}">{{$row.Txn.Status.DisplayName}}</span></td>
+    <td class="txn-actions">
+        {{if or (eq $row.Txn.Status "DRAFT") (eq $row.Txn.Status "INVALID")}}
+        <button
+            type="button"
+            class="action-link action-skip"
+            hx-post="/bank-txns/{{$row.Txn.ID}}/skip?accId={{$row.Txn.Account.ID}}&status={{$.ActiveStatus}}"
+            hx-target="#txn-list-panel"
+            hx-swap="innerHTML"
+            hx-confirm="Skip this transaction?"
+            hx-on::after-request="if(window.closeTxnDetail) window.closeTxnDetail()"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            <span>Skip</span>
+        </button>
+        {{end}}
+    </td>
+</tr>
+{{end}}
+{{if .PageMeta.NextPage}}
+<tr class="txn-load-sentinel"
+    hx-get="/bank-txns/rows?page={{.PageMeta.NextPage}}&limit={{.PageMeta.Limit}}&budget={{.Budget}}&account={{.Account}}&status={{.ActiveStatus}}"
+    hx-trigger="intersect once"
+    hx-swap="outerHTML">
+  <td colspan="7" class="txn-load-sentinel-cell">
+    <span class="txn-load-spinner">Loading&hellip;</span>
+  </td>
+</tr>
+{{end}}
+{{end}}

@@ -132,6 +132,8 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 				func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 					return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
 				},
+				s.Syncer.FetchPayeesByBudget,
+				s.TxnProcessor.SuggestPayee,
 			)
 		}
 
@@ -232,6 +234,8 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 			return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
 		},
+		s.Syncer.FetchPayeesByBudget,
+		s.TxnProcessor.SuggestPayee,
 	)
 
 	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accountID)
@@ -262,16 +266,20 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // enrichTransactionList enriches each transaction with payee and category suggestions.
-// Budget lookups are cached per account ID. Suggestion failures are non-fatal.
+// Budget and payee lookups are cached per account/budget ID. Suggestion failures are non-fatal.
+// When pattern-based suggestions are absent, falls back to direct YNAB payee name matching.
 func enrichTransactionList(
 	ctx context.Context,
 	txns []txn.Transaction,
 	budgetByAccID func(context.Context, string) (ynab.Budget, error),
 	getSuggestions func(context.Context, string, string) ([]txn.PayeeSuggestion, error),
 	getCategorySuggestions func(context.Context, string, string, string) ([]txn.CategorySuggestion, error),
+	getPayeesByBudget func(context.Context, string) ([]ynab.Payee, error),
+	suggestPayee func(txn.Transaction, []ynab.Payee) ynab.Payee,
 ) []TxnListRow {
 	rows := make([]TxnListRow, len(txns))
 	budgetCache := make(map[string]ynab.Budget)
+	payeeCache := make(map[string][]ynab.Payee)
 	failedAccounts := make(map[string]bool)
 
 	for i, t := range txns {
@@ -299,6 +307,18 @@ func enrichTransactionList(
 			sugPayeeID = payeeSuggestions[0].PayeeID
 			rows[i].SugPayee = payeeSuggestions[0].PayeeName
 			rows[i].AutoFilled = true
+		} else if suggestPayee != nil && getPayeesByBudget != nil {
+			// Fallback: match against YNAB payee names when no learned patterns exist
+			payees, cached := payeeCache[budget.ID]
+			if !cached {
+				payees, _ = getPayeesByBudget(ctx, budget.ID)
+				payeeCache[budget.ID] = payees
+			}
+			if matched := suggestPayee(t, payees); matched.ID != "" {
+				sugPayeeID = matched.ID
+				rows[i].SugPayee = matched.Name
+				rows[i].AutoFilled = true
+			}
 		}
 
 		catSuggestions, err := getCategorySuggestions(ctx, budget.ID, t.Description, sugPayeeID)
@@ -354,19 +374,21 @@ func (s *Server) detailBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Warn("failed to get payee suggestions for detail", "txnID", txnID, "error", err)
 	}
-	var sugPayeeID string
+	var patternPayeeID string
 	if len(payeeSugs) > 0 {
-		sugPayeeID = payeeSugs[0].PayeeID
+		patternPayeeID = payeeSugs[0].PayeeID
 	}
 
-	catSugs, catErr := s.TxnProcessor.GetCategorySuggestions(r.Context(), budget.ID, transaction.Description, sugPayeeID)
+	catSugs, catErr := s.TxnProcessor.GetCategorySuggestions(r.Context(), budget.ID, transaction.Description, patternPayeeID)
 	if catErr != nil {
 		slog.Warn("failed to get category suggestions for detail", "txnID", txnID, "error", catErr)
 	}
-	var sugCatID string
+	var patternCatID string
 	if len(catSugs) > 0 {
-		sugCatID = catSugs[0].CategoryID
+		patternCatID = catSugs[0].CategoryID
 	}
+
+	sugPayeeID, sugCatID := applyYnabPayeeFallback(transaction, payees, s.TxnProcessor.SuggestPayee, patternPayeeID, patternCatID)
 
 	data := struct {
 		Txn              txn.Transaction
@@ -409,6 +431,28 @@ func categoryNameByID(categories []ynab.Category, id string) string {
 		}
 	}
 	return ""
+}
+
+// applyYnabPayeeFallback returns suggested payee/category IDs using YNAB payee name matching
+// when pattern-based suggestions are absent. Pattern results win when non-empty.
+func applyYnabPayeeFallback(
+	t txn.Transaction,
+	payees []ynab.Payee,
+	suggestFn func(txn.Transaction, []ynab.Payee) ynab.Payee,
+	patternPayeeID, patternCatID string,
+) (payeeID, catID string) {
+	if patternPayeeID != "" {
+		return patternPayeeID, patternCatID
+	}
+	matched := suggestFn(t, payees)
+	if matched.ID == "" {
+		return "", patternCatID
+	}
+	catID = patternCatID
+	if catID == "" {
+		catID = matched.LastCategoryID
+	}
+	return matched.ID, catID
 }
 
 func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
@@ -466,6 +510,8 @@ func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
 			},
+			s.Syncer.FetchPayeesByBudget,
+			s.TxnProcessor.SuggestPayee,
 		),
 		Budget:       budget.ID,
 		Account:      accID,
@@ -575,6 +621,8 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
 			},
+			s.Syncer.FetchPayeesByBudget,
+			s.TxnProcessor.SuggestPayee,
 		),
 		Budget:       form.BudgetID,
 		Account:      form.AccountID,
@@ -1049,6 +1097,8 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
 			},
+			s.Syncer.FetchPayeesByBudget,
+			s.TxnProcessor.SuggestPayee,
 		),
 		Budget:       form.BudgetID,
 		Account:      form.AccountID,
@@ -1133,6 +1183,8 @@ func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
 			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
 			},
+			s.Syncer.FetchPayeesByBudget,
+			s.TxnProcessor.SuggestPayee,
 		),
 		Budget:       budget.ID,
 		Account:      accID,

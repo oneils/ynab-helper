@@ -18,6 +18,8 @@ func TestEnrichTransactionList_Empty(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		nil,
+		nil,
 	)
 	if len(rows) != 0 {
 		t.Errorf("expected 0 rows, got %d", len(rows))
@@ -45,7 +47,7 @@ func TestEnrichTransactionList_PayeeSuggestion(t *testing.T) {
 		return nil, nil
 	}
 
-	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions)
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, nil, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
@@ -85,7 +87,7 @@ func TestEnrichTransactionList_CategorySuggestion(t *testing.T) {
 		}, nil
 	}
 
-	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions)
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, nil, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
@@ -124,7 +126,7 @@ func TestEnrichTransactionList_BothSuggestions(t *testing.T) {
 		}, nil
 	}
 
-	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions)
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, nil, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
@@ -159,7 +161,7 @@ func TestEnrichTransactionList_NoMatch(t *testing.T) {
 		return nil, nil
 	}
 
-	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions)
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, nil, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
@@ -197,7 +199,7 @@ func TestEnrichTransactionList_BudgetLookupError(t *testing.T) {
 		return nil, nil
 	}
 
-	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions)
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, nil, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
@@ -229,7 +231,7 @@ func TestEnrichTransactionList_SuggestionErrors(t *testing.T) {
 		return nil, errors.New("category engine error")
 	}
 
-	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions)
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, nil, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
@@ -264,7 +266,7 @@ func TestEnrichTransactionList_BudgetCaching(t *testing.T) {
 		return nil, nil
 	}
 
-	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions)
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, nil, nil)
 
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
@@ -440,5 +442,210 @@ func TestDetailRoute_SaveInlineStillExists(t *testing.T) {
 
 	if !found {
 		t.Error("expected POST /bank-txns/{id}/save-inline route to still exist")
+	}
+}
+
+func TestEnrichTransactionList_FallbackPayeeMatch(t *testing.T) {
+	ctx := context.Background()
+
+	txns := []txn.Transaction{
+		{ID: "1", Description: "Purchase at BIEDRONKA", Account: txn.BankAccount{ID: "acc1"}},
+	}
+
+	budgetByAccID := func(_ context.Context, _ string) (ynab.Budget, error) {
+		return ynab.Budget{ID: "budget1"}, nil
+	}
+	getSuggestions := func(_ context.Context, _, _ string) ([]txn.PayeeSuggestion, error) {
+		return nil, nil // no learned patterns
+	}
+	getCategorySuggestions := func(_ context.Context, _, _, _ string) ([]txn.CategorySuggestion, error) {
+		return nil, nil
+	}
+	getPayeesByBudget := func(_ context.Context, _ string) ([]ynab.Payee, error) {
+		return []ynab.Payee{{ID: "p1", Name: "Biedronka"}}, nil
+	}
+	suggestPayee := func(t txn.Transaction, payees []ynab.Payee) ynab.Payee {
+		return ynab.Payee{ID: "p1", Name: "Biedronka"}
+	}
+
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, getPayeesByBudget, suggestPayee)
+
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if rows[0].SugPayee != "Biedronka" {
+		t.Errorf("expected SugPayee 'Biedronka', got '%s'", rows[0].SugPayee)
+	}
+	if !rows[0].AutoFilled {
+		t.Error("expected AutoFilled to be true when fallback payee found")
+	}
+}
+
+func TestEnrichTransactionList_FallbackNoMatch(t *testing.T) {
+	ctx := context.Background()
+
+	txns := []txn.Transaction{
+		{ID: "1", Description: "Unknown transaction", Account: txn.BankAccount{ID: "acc1"}},
+	}
+
+	budgetByAccID := func(_ context.Context, _ string) (ynab.Budget, error) {
+		return ynab.Budget{ID: "budget1"}, nil
+	}
+	getSuggestions := func(_ context.Context, _, _ string) ([]txn.PayeeSuggestion, error) {
+		return nil, nil
+	}
+	getCategorySuggestions := func(_ context.Context, _, _, _ string) ([]txn.CategorySuggestion, error) {
+		return nil, nil
+	}
+	getPayeesByBudget := func(_ context.Context, _ string) ([]ynab.Payee, error) {
+		return []ynab.Payee{{ID: "p1", Name: "Biedronka"}}, nil
+	}
+	suggestPayee := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{} // no match
+	}
+
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, getPayeesByBudget, suggestPayee)
+
+	if rows[0].SugPayee != "" {
+		t.Errorf("expected empty SugPayee on no match, got '%s'", rows[0].SugPayee)
+	}
+	if rows[0].AutoFilled {
+		t.Error("expected AutoFilled false when no match")
+	}
+}
+
+func TestEnrichTransactionList_FallbackSkippedWhenPatternExists(t *testing.T) {
+	ctx := context.Background()
+
+	txns := []txn.Transaction{
+		{ID: "1", Description: "LIDL 123", Account: txn.BankAccount{ID: "acc1"}},
+	}
+
+	budgetByAccID := func(_ context.Context, _ string) (ynab.Budget, error) {
+		return ynab.Budget{ID: "budget1"}, nil
+	}
+	getSuggestions := func(_ context.Context, _, _ string) ([]txn.PayeeSuggestion, error) {
+		return []txn.PayeeSuggestion{{PayeeID: "pattern-p", PayeeName: "PatternPayee"}}, nil
+	}
+	getCategorySuggestions := func(_ context.Context, _, _, _ string) ([]txn.CategorySuggestion, error) {
+		return nil, nil
+	}
+	payeeLookupCalled := false
+	getPayeesByBudget := func(_ context.Context, _ string) ([]ynab.Payee, error) {
+		payeeLookupCalled = true
+		return []ynab.Payee{{ID: "p1", Name: "Lidl"}}, nil
+	}
+	suggestPayee := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{ID: "p1", Name: "Lidl"}
+	}
+
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, getPayeesByBudget, suggestPayee)
+
+	if payeeLookupCalled {
+		t.Error("expected getPayeesByBudget not to be called when pattern suggestion exists")
+	}
+	if rows[0].SugPayee != "PatternPayee" {
+		t.Errorf("expected pattern payee 'PatternPayee', got '%s'", rows[0].SugPayee)
+	}
+}
+
+func TestEnrichTransactionList_FallbackEmptyPayeeID(t *testing.T) {
+	ctx := context.Background()
+
+	txns := []txn.Transaction{
+		{ID: "1", Description: "Some transaction", Account: txn.BankAccount{ID: "acc1"}},
+	}
+
+	budgetByAccID := func(_ context.Context, _ string) (ynab.Budget, error) {
+		return ynab.Budget{ID: "budget1"}, nil
+	}
+	getSuggestions := func(_ context.Context, _, _ string) ([]txn.PayeeSuggestion, error) {
+		return nil, nil
+	}
+	getCategorySuggestions := func(_ context.Context, _, _, _ string) ([]txn.CategorySuggestion, error) {
+		return nil, nil
+	}
+	getPayeesByBudget := func(_ context.Context, _ string) ([]ynab.Payee, error) {
+		return []ynab.Payee{{ID: "", Name: ""}}, nil // empty name/ID payee
+	}
+	suggestPayee := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{} // SuggestPayee returns zero value for empty name
+	}
+
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, getPayeesByBudget, suggestPayee)
+
+	if rows[0].SugPayee != "" {
+		t.Errorf("expected no prefill for empty payee name, got '%s'", rows[0].SugPayee)
+	}
+	if rows[0].AutoFilled {
+		t.Error("expected AutoFilled false for empty payee")
+	}
+}
+
+func TestApplyYnabPayeeFallback_PatternWins(t *testing.T) {
+	t1 := txn.Transaction{ID: "1", Description: "test"}
+	payees := []ynab.Payee{{ID: "ynab-p", Name: "YnabPayee", LastCategoryID: "ynab-cat"}}
+	suggestFn := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{ID: "ynab-p", Name: "YnabPayee", LastCategoryID: "ynab-cat"}
+	}
+
+	payeeID, catID := applyYnabPayeeFallback(t1, payees, suggestFn, "pattern-p", "pattern-cat")
+
+	if payeeID != "pattern-p" {
+		t.Errorf("expected pattern payee ID, got '%s'", payeeID)
+	}
+	if catID != "pattern-cat" {
+		t.Errorf("expected pattern category ID, got '%s'", catID)
+	}
+}
+
+func TestApplyYnabPayeeFallback_PayeeAndCategoryFromLastCategoryID(t *testing.T) {
+	t1 := txn.Transaction{ID: "1", Description: "BIEDRONKA"}
+	payees := []ynab.Payee{{ID: "p1", Name: "Biedronka", LastCategoryID: "cat-groceries"}}
+	suggestFn := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{ID: "p1", Name: "Biedronka", LastCategoryID: "cat-groceries"}
+	}
+
+	payeeID, catID := applyYnabPayeeFallback(t1, payees, suggestFn, "", "")
+
+	if payeeID != "p1" {
+		t.Errorf("expected fallback payee 'p1', got '%s'", payeeID)
+	}
+	if catID != "cat-groceries" {
+		t.Errorf("expected LastCategoryID 'cat-groceries', got '%s'", catID)
+	}
+}
+
+func TestApplyYnabPayeeFallback_CategoryEmptyWhenLastCategoryIDMissing(t *testing.T) {
+	t1 := txn.Transaction{ID: "1", Description: "LIDL"}
+	payees := []ynab.Payee{{ID: "p2", Name: "Lidl", LastCategoryID: ""}}
+	suggestFn := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{ID: "p2", Name: "Lidl", LastCategoryID: ""}
+	}
+
+	payeeID, catID := applyYnabPayeeFallback(t1, payees, suggestFn, "", "")
+
+	if payeeID != "p2" {
+		t.Errorf("expected fallback payee 'p2', got '%s'", payeeID)
+	}
+	if catID != "" {
+		t.Errorf("expected empty catID when LastCategoryID is empty, got '%s'", catID)
+	}
+}
+
+func TestApplyYnabPayeeFallback_NoMatchReturnsEmpty(t *testing.T) {
+	t1 := txn.Transaction{ID: "1", Description: "Unknown"}
+	payees := []ynab.Payee{{ID: "p1", Name: "Biedronka"}}
+	suggestFn := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{}
+	}
+
+	payeeID, catID := applyYnabPayeeFallback(t1, payees, suggestFn, "", "")
+
+	if payeeID != "" {
+		t.Errorf("expected empty payeeID on no match, got '%s'", payeeID)
+	}
+	if catID != "" {
+		t.Errorf("expected empty catID on no match, got '%s'", catID)
 	}
 }

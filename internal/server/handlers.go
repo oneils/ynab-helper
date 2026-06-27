@@ -153,28 +153,26 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) syncHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	budget := r.URL.Query().Get("budget")
 
-	syncHistory, err := s.Syncer.FindHistoryByBudget(r.Context(), budget)
+	var syncHistory []ynab.SyncHistory
+	var err error
+	if budget == "" {
+		syncHistory, err = s.Syncer.FetchHistory(r.Context())
+	} else {
+		syncHistory, err = s.Syncer.FindHistoryByBudget(r.Context(), budget)
+	}
+	var errorMsg string
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
+		slog.Error("failed to fetch sync history", "error", err)
+		errorMsg = "Failed to load sync history"
 	}
 
-	budgets, err := s.Syncer.FetchBudgets(r.Context())
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	data := struct {
+	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", struct {
 		History  []ynab.SyncHistory
-		Budgets  []ynab.Budget
 		ErrorMsg string
 	}{
-		History: syncHistory,
-		Budgets: budgets,
-	}
-
-	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", data)
+		History:  syncHistory,
+		ErrorMsg: errorMsg,
+	})
 }
 
 func (s *Server) aboutViewHandler(w http.ResponseWriter, r *http.Request) {
@@ -349,51 +347,42 @@ func (s *Server) detailBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Info("detail panel data", "budgetID", budget.ID, "payeeCount", len(payees), "categoryCount", len(categories))
+
 	payeeSugs, err := s.TxnProcessor.GetSmartSuggestions(r.Context(), budget.ID, transaction.Description)
 	if err != nil {
 		slog.Warn("failed to get payee suggestions for detail", "txnID", txnID, "error", err)
 	}
-	var sugPayeeID, sugPayeeName string
-	autoFilled := false
+	var sugPayeeID string
 	if len(payeeSugs) > 0 {
 		sugPayeeID = payeeSugs[0].PayeeID
-		sugPayeeName = payeeSugs[0].PayeeName
-		autoFilled = true
 	}
 
 	catSugs, catErr := s.TxnProcessor.GetCategorySuggestions(r.Context(), budget.ID, transaction.Description, sugPayeeID)
 	if catErr != nil {
 		slog.Warn("failed to get category suggestions for detail", "txnID", txnID, "error", catErr)
 	}
-	var sugCatID, sugCatName string
+	var sugCatID string
 	if len(catSugs) > 0 {
 		sugCatID = catSugs[0].CategoryID
-		sugCatName = catSugs[0].CategoryName
-		autoFilled = true
 	}
 
 	data := struct {
-		Txn             txn.Transaction
-		BudgetID        string
-		Payees          []ynab.Payee
-		Categories      []ynab.Category
-		SugPayeeID      string
-		SugPayeeName    string
-		SugCategoryID   string
-		SugCategoryName string
-		AutoFilled      bool
-		ActiveStatus    string
+		Txn           txn.Transaction
+		BudgetID      string
+		Payees        []ynab.Payee
+		Categories    []ynab.Category
+		SugPayeeID    string
+		SugCategoryID string
+		ActiveStatus  string
 	}{
-		Txn:             transaction,
-		BudgetID:        budget.ID,
-		Payees:          payees,
-		Categories:      categories,
-		SugPayeeID:      sugPayeeID,
-		SugPayeeName:    sugPayeeName,
-		SugCategoryID:   sugCatID,
-		SugCategoryName: sugCatName,
-		AutoFilled:      autoFilled,
-		ActiveStatus:    activeStatus,
+		Txn:           transaction,
+		BudgetID:      budget.ID,
+		Payees:        payees,
+		Categories:    categories,
+		SugPayeeID:    sugPayeeID,
+		SugCategoryID: sugCatID,
+		ActiveStatus:  activeStatus,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "txn-detail-panel", data)
@@ -575,28 +564,28 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) settingsViewHandler(w http.ResponseWriter, r *http.Request) {
 	syncHistory, err := s.Syncer.FetchHistory(r.Context())
+	var historyErrMsg string
 	if err != nil {
 		slog.Error("failed to fetch sync history on settings page", "error", err)
-		// Don't block page load, just show empty history
-		syncHistory = []ynab.SyncHistory{}
+		historyErrMsg = "Failed to load sync history"
 	}
 
 	budgets, err := s.Syncer.FetchBudgets(r.Context())
 	if err != nil {
 		slog.Error("failed to fetch budgets on settings page", "error", err)
-		// Don't block page load, just show empty budgets
 		budgets = []ynab.Budget{}
 	}
 
-	slog.Info("fetched budgets", "count", len(budgets))
+	slog.Debug("fetched budgets", "count", len(budgets))
 
 	data := struct {
 		History  []ynab.SyncHistory
 		Budgets  []ynab.Budget
 		ErrorMsg string
 	}{
-		History: syncHistory,
-		Budgets: budgets,
+		History:  syncHistory,
+		Budgets:  budgets,
+		ErrorMsg: historyErrMsg,
 	}
 
 	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", baseTmpl, data)
@@ -608,21 +597,22 @@ func (s *Server) syncBudgetsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	budgets, err := s.Syncer.FetchBudgets(r.Context())
+	w.Header().Set("HX-Refresh", "true")
+
+	syncHistory, err := s.Syncer.FetchHistory(r.Context())
+	var errorMsg string
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
+		slog.Error("failed to fetch sync history after budget sync", "error", err)
+		errorMsg = "Failed to load sync history"
 	}
 
-	data := struct {
+	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", struct {
 		History  []ynab.SyncHistory
-		Budgets  []ynab.Budget
 		ErrorMsg string
 	}{
-		Budgets: budgets,
-	}
-
-	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", data)
+		History:  syncHistory,
+		ErrorMsg: errorMsg,
+	})
 }
 
 func (s *Server) syncAccountsHandler(w http.ResponseWriter, r *http.Request) {
@@ -632,6 +622,10 @@ func (s *Server) syncAccountsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	budget := r.PostForm.Get("budget")
+	if budget == "" {
+		s.render(w, http.StatusBadRequest, "error.tmpl.html", errorTmpl, "a budget must be selected")
+		return
+	}
 
 	if err := s.Syncer.SyncAccounts(r.Context(), budget); err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -649,6 +643,10 @@ func (s *Server) syncCategoriesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	budget := r.PostForm.Get("budget")
+	if budget == "" {
+		s.render(w, http.StatusBadRequest, "error.tmpl.html", errorTmpl, "a budget must be selected")
+		return
+	}
 
 	if err := s.Syncer.SyncCategories(r.Context(), budget); err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -656,27 +654,19 @@ func (s *Server) syncCategoriesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	syncHistory, err := s.Syncer.FindHistoryByBudget(r.Context(), budget)
+	var errorMsg string
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
+		slog.Error("failed to fetch sync history after categories sync", "error", err)
+		errorMsg = "Failed to load sync history"
 	}
 
-	budgets, err := s.Syncer.FetchBudgets(r.Context())
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	data := struct {
+	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", struct {
 		History  []ynab.SyncHistory
-		Budgets  []ynab.Budget
 		ErrorMsg string
 	}{
-		History: syncHistory,
-		Budgets: budgets,
-	}
-
-	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", data)
+		History:  syncHistory,
+		ErrorMsg: errorMsg,
+	})
 }
 
 func (s *Server) syncPayeesHandler(w http.ResponseWriter, r *http.Request) {
@@ -686,6 +676,10 @@ func (s *Server) syncPayeesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	budget := r.PostForm.Get("budget")
+	if budget == "" {
+		s.render(w, http.StatusBadRequest, "error.tmpl.html", errorTmpl, "a budget must be selected")
+		return
+	}
 
 	if err := s.Syncer.SyncPayees(r.Context(), budget); err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -693,27 +687,19 @@ func (s *Server) syncPayeesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	syncHistory, err := s.Syncer.FindHistoryByBudget(r.Context(), budget)
+	var errorMsg string
 	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
+		slog.Error("failed to fetch sync history after payees sync", "error", err)
+		errorMsg = "Failed to load sync history"
 	}
 
-	budgets, err := s.Syncer.FetchBudgets(r.Context())
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	data := struct {
+	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", struct {
 		History  []ynab.SyncHistory
-		Budgets  []ynab.Budget
 		ErrorMsg string
 	}{
-		History: syncHistory,
-		Budgets: budgets,
-	}
-
-	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "sync-statuses", data)
+		History:  syncHistory,
+		ErrorMsg: errorMsg,
+	})
 }
 
 func (s *Server) uploadBankTxnsHandler(w http.ResponseWriter, r *http.Request) {

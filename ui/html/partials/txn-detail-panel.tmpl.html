@@ -24,12 +24,16 @@
                 Payee
                 {{if $.SugPayeeID}}<small class="auto-filled-hint">(suggested)</small>{{end}}
             </label>
+            {{if not .Payees}}
+            <p class="detail-empty-hint">No payees &mdash; sync from <a href="/settings">Settings &rarr; Sync Payees</a> first.</p>
+            {{else}}
             <select id="detail-payee" name="payee" class="detail-select">
                 <option value="">Select&hellip;</option>
                 {{range .Payees}}
                 <option value="{{.ID}}" {{if eq $.SugPayeeID .ID}}selected{{end}}>{{.Name}}</option>
                 {{end}}
             </select>
+            {{end}}
         </div>
 
         <div class="detail-field">
@@ -37,12 +41,16 @@
                 Category
                 {{if $.SugCategoryID}}<small class="auto-filled-hint">(suggested)</small>{{end}}
             </label>
+            {{if not .Categories}}
+            <p class="detail-empty-hint">No categories &mdash; sync from <a href="/settings">Settings &rarr; Sync Categories</a> first.</p>
+            {{else}}
             <select id="detail-category" name="category" class="detail-select">
                 <option value="">Select&hellip;</option>
                 {{range .Categories}}
                 <option value="{{.ID}}" {{if eq $.SugCategoryID .ID}}selected{{end}}>{{.Name}}</option>
                 {{end}}
             </select>
+            {{end}}
         </div>
 
         <div class="detail-field">
@@ -53,7 +61,7 @@
 
     <div class="detail-actions">
         <button type="button"
-            class="btn btn-primary"
+            class="button-primary"
             hx-post="/ynab-add-txn?status={{.ActiveStatus}}"
             hx-include="#detail-form"
             hx-target="#txn-list-panel"
@@ -64,7 +72,7 @@
             Accept &amp; Send to YNAB
         </button>
         <button type="button"
-            class="btn btn-secondary"
+            class="button-secondary"
             hx-post="/bank-txns/{{.Txn.ID}}/save-inline?status={{.ActiveStatus}}"
             hx-include="#detail-form"
             hx-target="#txn-list-panel"
@@ -74,7 +82,7 @@
             Remember Selections
         </button>
         <button type="button"
-            class="btn btn-secondary"
+            class="button danger"
             hx-post="/bank-txns/{{.Txn.ID}}/skip?accId={{.Txn.Account.ID}}&status={{.ActiveStatus}}"
             hx-target="#txn-list-panel"
             hx-swap="innerHTML"

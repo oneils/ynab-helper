@@ -1,46 +1,35 @@
 {{define "sync-statuses"}}
-<section id="sync-status">
-    <div>
-        <h3>YNAB sync history</h3>
-        <label for="history-budget">Budget</label>
-        <select name="budget" id="history-budget" hx-trigger="change" hx-get="/sync-history" hx-target="#sync-status">
-            <option value="">Select...</option>
-            {{range .Budgets}}
-            <option value="{{.ID}}">{{.Name}}</option>
-            {{end}}
-        </select>
-        {{if .History}}
-        <div class="grid">
+<h3>YNAB sync history</h3>
+{{if .History}}
+<div class="settings-card settings-card--flush">
+    <table>
+        <thead>
+            <tr>
+                <th>Action</th>
+                <th>Updated</th>
+                <th>Status</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
             {{range .History}}
-            <article>
-                <h4>{{.Name}}</h4>
-                Updated at: <small>{{.UpdatedAt}}</small><br/>
-                Status: <label {{if eq .Status "success" }}class="ok-status" {{else}} class="error" {{end}}>{{.Status}}</label><br/>
-                {{with .Message}}
-                Message: <label>{{.}}</label>
-                {{end}}
-            </article>
-
+            <tr>
+                <td>{{.Name}}</td>
+                <td>{{.UpdatedAt.Format "Jan 02, 2006 15:04"}}</td>
+                <td><span class="badge {{if eq .Status "success"}}badge-success{{else}}badge-error{{end}}">{{.Status}}</span></td>
+                <td>{{with .Message}}{{.}}{{else}}—{{end}}</td>
+            </tr>
             {{end}}
-
-        </div>
-
-        {{else if .ErrorMsg}}
-
-        <div class="grid">
-            <article>
-                <h4>History error</h4>
-                <label class='error'>{{.ErrorMsg}}</label>
-            </article>
-
-            {{else}}
-
-            <div>No history found</div>
-
-            {{end}}
-        </div>
-    </div>
-</section>
-
-
+        </tbody>
+    </table>
+</div>
+{{else if .ErrorMsg}}
+<div class="settings-card">
+    <p class="text-muted">{{.ErrorMsg}}</p>
+</div>
+{{else}}
+<div class="settings-card">
+    <p class="text-muted">No history found</p>
+</div>
+{{end}}
 {{end}}

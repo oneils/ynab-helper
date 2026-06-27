@@ -1,19 +1,25 @@
 # YNAB API
-# https://api.ynab.com
 # https://api.ynab.com/v1
 
 ### Get all budgets
 GET https://api.ynab.com/v1/budgets
-accept: application/json
-Authorization: Bearer
+Accept: application/json
+Authorization: Bearer {{ynab_token}}
+
 
 ### Get all accounts for a budget
-GET https://api.ynab.com/v1/budgets/a50d8392-9abe-4827-b941-b311de6fdbd8/accounts
-accept: application/json
-Authorization: Bearer {{pat}}
+GET https://api.ynab.com/v1/budgets/{{ynab_budget_id}}/accounts
+Accept: application/json
+Authorization: Bearer {{ynab_token}}
 
-### Get categories
-GET https://api.ynab.com/v1/budgets
-accept: application/json
-Authorization: Bearer
 
+### Get categories for a budget
+GET https://api.ynab.com/v1/budgets/{{ynab_budget_id}}/categories
+Accept: application/json
+Authorization: Bearer {{ynab_token}}
+
+
+### Get payees for a budget
+GET https://api.ynab.com/v1/budgets/{{ynab_budget_id}}/payees
+Accept: application/json
+Authorization: Bearer {{ynab_token}}

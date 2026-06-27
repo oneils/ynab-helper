@@ -1,42 +1,146 @@
-### GET health
-GET http://localhost:5002/api/v1/health
+### Health check
+GET {{base_url}}/health
 Accept: application/json
 
 
-### GET request with a header
-GET http://localhost:5002/api/v1/transactions
+### Readiness check (includes DB ping)
+GET {{base_url}}/readiness
 Accept: application/json
 
 
-### GET request with a header
-GET http://localhost:5002/api/v1/transactions
+### --- Bank Transactions ---
+
+### List bank transactions (full page)
+GET {{base_url}}/bank-txns/?budget={{ynab_budget_id}}&account={{ynab_account_id}}&status=pending&page=1&limit=20
+Accept: text/html
+
+
+### List bank transaction rows only (HTMX infinite scroll)
+GET {{base_url}}/bank-txns/rows?budget={{ynab_budget_id}}&account={{ynab_account_id}}&status=pending&page=1&limit=20
+Accept: text/html
+
+
+### Get transaction detail panel
+GET {{base_url}}/bank-txns/<id>/detail
+Accept: text/html
+
+
+### Skip a single transaction
+POST {{base_url}}/bank-txns/<id>/skip?accId={{ynab_account_id}}&status=pending
+Content-Type: application/x-www-form-urlencoded
+
+
+### Save inline transaction (sets payee + category, records pattern)
+POST {{base_url}}/bank-txns/<id>/save-inline?status=pending
+Content-Type: application/x-www-form-urlencoded
+
+budget={{ynab_budget_id}}&account={{ynab_account_id}}&payee=<payee_id>&category=<category_id>&memo=Coffee&amount=-1500&txnDate=2026-06-27
+
+
+### Bulk skip transactions
+POST {{base_url}}/bank-txns/bulk-skip
+Content-Type: application/x-www-form-urlencoded
+
+txn_ids[]=<id1>&txn_ids[]=<id2>&account_id={{ynab_account_id}}
+
+
+### --- Suggestions (JSON) ---
+
+### Payee suggestions
+GET {{base_url}}/bank-txns/api/payee-suggestions?budget_id={{ynab_budget_id}}&description=Amazon
 Accept: application/json
 
 
-### Send a form with the text and file fields for Revolut
-POST http://localhost:5002/api/v1/transactions/upload
+### Category suggestions
+GET {{base_url}}/bank-txns/api/category-suggestions?budget_id={{ynab_budget_id}}&description=Amazon&payee_id=<payee_id>
+Accept: application/json
+
+
+### --- Import Flow ---
+
+### Preview bank transactions from CSV (shows diff before committing)
+POST {{base_url}}/preview-bank-txns
 Content-Type: multipart/form-data; boundary=WebAppBoundary
 
 --WebAppBoundary
-Content-Disposition: form-data; name="file"; filename="revolut.csv"
-Content-Type: application/json
+Content-Disposition: form-data; name="budget"
 
-< /Users/user/temp/santander.csv
+{{ynab_budget_id}}
+--WebAppBoundary
+Content-Disposition: form-data; name="account"
+
+{{ynab_account_id}}
+--WebAppBoundary
+Content-Disposition: form-data; name="txn-file"; filename="revolut.csv"
+Content-Type: text/csv
+
+< /Users/lex/Downloads/revolut.csv
 --WebAppBoundary--
 
 
-### Send a form with the text and file fields for Santander
-POST http://localhost:5002/api/v1/transactions/upload
+### Confirm import (uses file_uuid from preview response)
+POST {{base_url}}/confirm-bank-txns
+Content-Type: application/x-www-form-urlencoded
+
+file_uuid=<file_uuid>&budget={{ynab_budget_id}}&account={{ynab_account_id}}
+
+
+### Cancel preview (deletes temp file)
+POST {{base_url}}/cancel-preview
+Content-Type: application/x-www-form-urlencoded
+
+file_uuid=<file_uuid>
+
+
+### Upload bank transactions directly (no preview step)
+POST {{base_url}}/upload-bank-txns
 Content-Type: multipart/form-data; boundary=WebAppBoundary
 
 --WebAppBoundary
-Content-Disposition: form-data; name="file"; filename="revolut-partial.csv"
-Content-Type: application/json
+Content-Disposition: form-data; name="budget"
 
-< /Users/user/Downloads/revolut-partial.csv
+{{ynab_budget_id}}
+--WebAppBoundary
+Content-Disposition: form-data; name="account"
+
+{{ynab_account_id}}
+--WebAppBoundary
+Content-Disposition: form-data; name="txn-file"; filename="revolut.csv"
+Content-Type: text/csv
+
+< /Users/lex/Downloads/revolut.csv
 --WebAppBoundary--
 
 
-### Skip Transaction
-POST http://localhost:5002/api/v1/transactions/62bb3d8ada9638fd7dc168b2/skip
-Content-Type: application/json
+### --- YNAB Sync ---
+
+### Push transaction to YNAB
+POST {{base_url}}/ynab-add-txn
+Content-Type: application/x-www-form-urlencoded
+
+budget={{ynab_budget_id}}&account={{ynab_account_id}}&payee=<payee_id>&category=<category_id>&memo=Coffee&amount=-1500&txnDate=2026-06-27
+
+
+### Sync YNAB budgets
+POST {{base_url}}/ynab-budgets-sync
+Content-Type: application/x-www-form-urlencoded
+
+
+### Sync YNAB accounts
+POST {{base_url}}/ynab-accs-sync
+Content-Type: application/x-www-form-urlencoded
+
+
+### Sync YNAB categories
+POST {{base_url}}/ynab-categories-sync
+Content-Type: application/x-www-form-urlencoded
+
+
+### Sync YNAB payees
+POST {{base_url}}/ynab-payee-sync
+Content-Type: application/x-www-form-urlencoded
+
+
+### View sync history
+GET {{base_url}}/sync-history
+Accept: text/html

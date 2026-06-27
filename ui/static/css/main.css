@@ -679,6 +679,16 @@ footer {
     .txn-detail-panel:not(.txn-detail-panel--open) {
         display: none !important;
     }
+
+    .txn-detail-panel.txn-detail-panel--open {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        width: min(400px, 100vw);
+        z-index: 500;
+        box-shadow: var(--shadow-xl);
+    }
 }
 
 @media (max-width: 768px) {
@@ -767,7 +777,7 @@ footer {
 
 /* Settings Cards */
 .settings-card {
-    background: var(--bg-surface);
+    background: var(--bg-elevated);
     border: 1px solid var(--bg-border);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
@@ -1701,21 +1711,19 @@ footer {
 }
 
 .detail-actions {
-    display: flex;
-    flex-direction: column;
+    display: flex !important;
+    flex-direction: column !important;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-xl);
     padding-top: var(--spacing-lg);
     border-top: 1px solid var(--bg-border);
 }
 
-.detail-actions button {
-    width: 100%;
-}
-
+.detail-actions button,
 .detail-actions .button-primary,
 .detail-actions .button-secondary {
-    display: flex;
+    width: 100% !important;
+    display: flex !important;
     justify-content: center;
 }
 

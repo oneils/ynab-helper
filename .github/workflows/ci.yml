@@ -51,14 +51,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: build and push to Docker Hub by digest
         id: build-dockerhub
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=oneils/ynab-helper,push-by-digest=true,name-canonical=true,push=true
       - name: build and push to GHCR by digest
         id: build-ghcr
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: ${{ matrix.platform }}

@@ -71,12 +71,12 @@ jobs:
           digest_ghcr="${{ steps.build-ghcr.outputs.digest }}"
           touch "/tmp/digests-dockerhub/${digest_dockerhub#sha256:}"
           touch "/tmp/digests-ghcr/${digest_ghcr#sha256:}"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: digests-dockerhub-${{ matrix.artifact }}
           path: /tmp/digests-dockerhub/*
           retention-days: 1
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: digests-ghcr-${{ matrix.artifact }}
           path: /tmp/digests-ghcr/*

@@ -2,79 +2,77 @@
 
 {{define "main"}}
 
-<h2>YNAB sync settings</h2>
+<div class="page-header">
+    <h2>Sync</h2>
+    <p class="page-description">Manage YNAB data synchronisation</p>
+</div>
 
-<!--Sync Budgets and accs-->
-<section>
-    <form hx-post="/ynab-budgets-sync" hx-boost="true" hx-swap="outerHTML" hx-target="#sync-status">
-        <article>
-            <h3>Sync Budgets with Accounts</h3>
-            <footer>
-                <button type="submit">Sync</button>
-            </footer>
-        </article>
-    </form>
-</section>
+<!-- Global budget selector -->
+<div class="form-group settings-budget-selector">
+    <label for="global-budget">Budget</label>
+    <select id="global-budget" hx-get="/sync-history" hx-target="#sync-status" hx-trigger="change" name="budget">
+        <option value="">Select budget…</option>
+        {{range .Budgets}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+</div>
 
-<section>
-    <div class="grid">
-        <!--  Categories       -->
-        <form hx-post="/ynab-categories-sync" hx-boost="true" hx-swap="outerHTML" hx-target="#sync-status">
-            <article>
-                <h3>Sync Categories</h3>
-                <div class="grid align-center">
-                    <div>
-                        <label for="category-budget">Budget</label>
-                        <select name="budget" id="category-budget">
-                            {{range .Budgets}}
-                            <option value="{{.ID}}">{{.Name}}</option>
-                            {{end}}
-                        </select>
-                    </div>
-                    <div>
-                        <label for="category-last-known">
-                            <input type="checkbox" id="category-last-known" name="last-known" role="switch" checked />
-                            Last known
-                        </label>
-                    </div>
-                </div>
-
-                <footer>
-                    <button type="submit">Sync</button>
-                </footer>
-            </article>
-        </form>
-        <!--   Payee      -->
-        <form hx-post="/ynab-payee-sync" hx-boost="true" hx-swap="outerHTML" hx-target="#sync-status">
-            <article>
-                <h3>Sync Payee</h3>
-                <div class="grid align-center">
-                    <div>
-                        <label for="payee-budget">Budget</label>
-                        <select name="budget" id="payee-budget">
-                            {{range .Budgets}}
-                            <option value="{{.ID}}">{{.Name}}</option>
-                            {{end}}
-                        </select>
-                    </div>
-                    <div>
-                        <label for="payee-last-known">
-                            <input type="checkbox" id="payee-last-known" name="last-known" role="switch" checked />
-                            Last known
-                        </label>
-                    </div>
-                </div>
-
-                <footer>
-                    <button type="submit">Sync</button>
-                </footer>
-            </article>
-        </form>
+<!-- Sync Budgets with Accounts -->
+<form hx-post="/ynab-budgets-sync" hx-swap="innerHTML" hx-target="#sync-status">
+    <div class="settings-card">
+        <h3>Sync Budgets with Accounts</h3>
+        <p class="card-description">Fetches your budgets and linked accounts from YNAB</p>
+        <div class="card-actions">
+            <button type="submit">Sync</button>
+        </div>
     </div>
-</section>
+</form>
+
+<!-- Sync Categories -->
+<form hx-post="/ynab-categories-sync" hx-swap="innerHTML" hx-target="#sync-status">
+    <div class="settings-card">
+        <h3>Sync Categories</h3>
+        <p class="card-description">Syncs category groups and categories</p>
+        <input type="hidden" name="budget" class="budget-input">
+        <div>
+            <label for="category-last-known">
+                <input type="checkbox" id="category-last-known" name="last-known" checked />
+                Incremental (from last sync)
+            </label>
+        </div>
+        <div class="card-actions">
+            <button type="submit" class="sync-budget-btn" disabled>Sync</button>
+        </div>
+    </div>
+</form>
+
+<!-- Sync Payees -->
+<form hx-post="/ynab-payee-sync" hx-swap="innerHTML" hx-target="#sync-status">
+    <div class="settings-card">
+        <h3>Sync Payees</h3>
+        <p class="card-description">Syncs payees from YNAB</p>
+        <input type="hidden" name="budget" class="budget-input">
+        <div>
+            <label for="payee-last-known">
+                <input type="checkbox" id="payee-last-known" name="last-known" checked />
+                Incremental (from last sync)
+            </label>
+        </div>
+        <div class="card-actions">
+            <button type="submit" class="sync-budget-btn" disabled>Sync</button>
+        </div>
+    </div>
+</form>
 
 <section id="sync-status">
     {{template "sync-statuses" .}}
 </section>
+
+<script>
+document.getElementById('global-budget').addEventListener('change', function() {
+    const val = this.value;
+    document.querySelectorAll('.budget-input').forEach(el => el.value = val);
+    document.querySelectorAll('.sync-budget-btn').forEach(btn => btn.disabled = !val);
+});
+</script>
 
 {{end}}

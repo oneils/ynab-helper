@@ -1,6 +1,6 @@
 # ynab-helper
 
-![Build Status](https://github.com/oneils/ynab-helper/actions/workflows/ci.yml/badge.svg)
+[![build](https://github.com/oneils/ynab-helper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oneils/ynab-helper/actions/workflows/ci.yml)
 
 A self-hosted web app that imports CSV transaction exports from Polish banks directly into [YNAB](https://www.youneedabudget.com/), without relying on third-party bank sync partners.
 

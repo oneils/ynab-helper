@@ -42,8 +42,8 @@ The sync order per cycle: budgets → then for each known budget: accounts, cate
 **Files:**
 - Modify: `internal/app/app.go`
 
-- [ ] add `SyncInterval time.Duration` to `Config` with tag `long:"sync-interval" env:"SYNC_INTERVAL" default:"1h" description:"Interval between automatic YNAB syncs"`
-- [ ] verify `go build ./...` passes
+- [x] add `SyncInterval time.Duration` to `Config` with tag `long:"sync-interval" env:"SYNC_INTERVAL" default:"1h" description:"Interval between automatic YNAB syncs"`
+- [x] verify `go build ./...` passes
 
 ---
 
@@ -52,21 +52,12 @@ The sync order per cycle: budgets → then for each known budget: accounts, cate
 **Files:**
 - Create: `internal/ynab/scheduler.go`
 
-- [ ] define interface `BudgetSyncRunner` with methods used by Scheduler:
-  ```go
-  type BudgetSyncRunner interface {
-      SyncBudgets(ctx context.Context) error
-      FetchBudgets(ctx context.Context) ([]Budget, error)
-      SyncAccounts(ctx context.Context, budgetID string) error
-      SyncCategories(ctx context.Context, budgetID string) error
-      SyncPayees(ctx context.Context, budgetID string) error
-  }
-  ```
-- [ ] implement `Scheduler` struct holding `runner BudgetSyncRunner` and `interval time.Duration`
-- [ ] implement `NewScheduler(runner BudgetSyncRunner, interval time.Duration) *Scheduler`
-- [ ] implement `Start(ctx context.Context)` — runs `syncAll` immediately, then ticks at `interval`; returns when `ctx` is cancelled
-- [ ] implement private `syncAll(ctx context.Context)` — calls `SyncBudgets`, then for each budget ID calls `SyncAccounts`, `SyncCategories`, `SyncPayees`; logs errors with `slog.Error` and continues on failure (never returns error)
-- [ ] verify `go build ./...` passes
+- [x] define interface `BudgetSyncRunner` with methods used by Scheduler
+- [x] implement `Scheduler` struct holding `runner BudgetSyncRunner` and `interval time.Duration`
+- [x] implement `NewScheduler(runner BudgetSyncRunner, interval time.Duration) *Scheduler`
+- [x] implement `Start(ctx context.Context)` — runs `syncAll` immediately, then ticks at `interval`; returns when `ctx` is cancelled
+- [x] implement private `syncAll(ctx context.Context)` — calls `SyncBudgets`, then for each budget ID calls `SyncAccounts`, `SyncCategories`, `SyncPayees`; logs errors with `slog.Error` and continues on failure
+- [x] verify `go build ./...` passes
 
 ---
 
@@ -75,10 +66,10 @@ The sync order per cycle: budgets → then for each known budget: accounts, cate
 **Files:**
 - Modify: `internal/app/app.go`
 
-- [ ] add `Scheduler *ynab.Scheduler` field to `App` struct
-- [ ] in `New()`, after creating `syncer`, create `ynab.NewScheduler(syncer, cfg.SyncInterval)` and assign to `App.Scheduler`
-- [ ] in `App.Run(ctx)`, launch `go a.Scheduler.Start(ctx)` before calling `a.Server.Run(ctx, a.Config.Addr)`
-- [ ] verify `go build ./...` and `go run ./cmd/ynab-helper` starts without errors
+- [x] add `Scheduler *ynab.Scheduler` field to `App` struct
+- [x] in `New()`, after creating `syncer`, create `ynab.NewScheduler(syncer, cfg.SyncInterval)` and assign to `App.Scheduler`
+- [x] in `App.Run(ctx)`, launch `go a.Scheduler.Start(ctx)` before calling `a.Server.Run(ctx, a.Config.Addr)`
+- [x] verify `go build ./...` passes
 
 ---
 
@@ -87,12 +78,12 @@ The sync order per cycle: budgets → then for each known budget: accounts, cate
 **Files:**
 - Create: `internal/ynab/scheduler_test.go`
 
-- [ ] define `mockSyncRunner` implementing `BudgetSyncRunner` with call counters and configurable error returns
-- [ ] test `syncAll` happy path: after one call, `SyncBudgets` called once and per-budget methods called once per budget
-- [ ] test `syncAll` when `SyncBudgets` errors: logs error, per-budget sync methods not called
-- [ ] test `syncAll` when a per-budget sync errors: logs error, continues to next budget/resource
-- [ ] test `Start` runs `syncAll` immediately on start (no tick needed), then again after interval
-- [ ] run `go test ./internal/ynab/...` — must pass
+- [x] define `mockSyncRunner` implementing `BudgetSyncRunner` with call counters and configurable error returns
+- [x] test `syncAll` happy path: after one call, `SyncBudgets` called once and per-budget methods called once per budget
+- [x] test `syncAll` when `SyncBudgets` errors: logs error, per-budget sync methods not called
+- [x] test `syncAll` when a per-budget sync errors: logs error, continues to next budget/resource
+- [x] test `Start` runs `syncAll` immediately on start (no tick needed), then again after interval
+- [x] run `go test ./internal/ynab/...` — PASS
 
 ---
 

@@ -18,18 +18,20 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Addr      string `long:"addr" env:"ADDR" default:":8080" description:"HTTP service address"`
-	WebRoot   string `long:"web-root" env:"WEB_ROOT" default:"./ui/static" description:"Path to static web assets"`
-	YnabAPI   string `long:"ynab-api" env:"YNAB_API" description:"YNAB API endpoint" default:"https://api.youneedabudget.com/v1"`
-	YnabToken string `long:"ynab-token" env:"YNAB_TOKEN" description:"YNAB API token"`
-	SQLite    sqlite.Config
+	Addr         string        `long:"addr" env:"ADDR" default:":8080" description:"HTTP service address"`
+	WebRoot      string        `long:"web-root" env:"WEB_ROOT" default:"./ui/static" description:"Path to static web assets"`
+	YnabAPI      string        `long:"ynab-api" env:"YNAB_API" description:"YNAB API endpoint" default:"https://api.youneedabudget.com/v1"`
+	YnabToken    string        `long:"ynab-token" env:"YNAB_TOKEN" description:"YNAB API token"`
+	SyncInterval time.Duration `long:"sync-interval" env:"SYNC_INTERVAL" default:"1h" description:"Interval between automatic YNAB syncs"`
+	SQLite       sqlite.Config
 }
 
 // App represents the application with all its dependencies.
 type App struct {
-	Config Config
-	DB     *sqlite.DB
-	Server *server.Server
+	Config    Config
+	DB        *sqlite.DB
+	Server    *server.Server
+	Scheduler *ynab.Scheduler
 }
 
 // New creates a new App with all dependencies wired up.
@@ -81,14 +83,16 @@ func New(cfg Config) (*App, error) {
 	}
 
 	return &App{
-		Config: cfg,
-		DB:     db,
-		Server: srv,
+		Config:    cfg,
+		DB:        db,
+		Server:    srv,
+		Scheduler: ynab.NewScheduler(syncer, cfg.SyncInterval),
 	}, nil
 }
 
 // Run starts the application.
 func (a *App) Run(ctx context.Context) error {
+	go a.Scheduler.Start(ctx)
 	return a.Server.Run(ctx, a.Config.Addr)
 }
 

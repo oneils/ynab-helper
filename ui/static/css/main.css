@@ -1686,6 +1686,7 @@ footer {
 }
 
 .detail-select,
+.detail-autocomplete,
 .detail-textarea {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
@@ -1699,6 +1700,7 @@ footer {
 }
 
 .detail-select:focus,
+.detail-autocomplete:focus,
 .detail-textarea:focus {
     border-color: var(--ui-primary);
     box-shadow: 0 0 0 2px var(--ui-primary-light);

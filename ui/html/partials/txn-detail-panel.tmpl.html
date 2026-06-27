@@ -12,7 +12,7 @@
         <div class="detail-description">{{.Txn.Description}}</div>
     </div>
 
-    <form id="detail-form">
+    <form id="detail-form" data-description="{{.Txn.Description}}">
         <input type="hidden" name="txnID" value="{{.Txn.ID}}">
         <input type="hidden" name="budget" value="{{.BudgetID}}">
         <input type="hidden" name="account" value="{{.Txn.Account.ID}}">
@@ -20,36 +20,48 @@
         <input type="hidden" name="amount" value="{{.Txn.Amount}}">
 
         <div class="detail-field">
-            <label for="detail-payee" class="detail-label">
-                Payee
-                {{if $.SugPayeeID}}<small class="auto-filled-hint">(suggested)</small>{{end}}
-            </label>
+            <label for="detail-payee-input" class="detail-label">Payee</label>
             {{if not .Payees}}
             <p class="detail-empty-hint">No payees &mdash; sync from <a href="/settings">Settings &rarr; Sync Payees</a> first.</p>
             {{else}}
-            <select id="detail-payee" name="payee" class="detail-select">
-                <option value="">Select&hellip;</option>
+            <input
+                type="text"
+                id="detail-payee-input"
+                class="detail-autocomplete"
+                list="detail-payees-list"
+                placeholder="Type to search payee&hellip;"
+                value="{{.SugPayeeName}}"
+                autocomplete="off"
+            >
+            <datalist id="detail-payees-list">
                 {{range .Payees}}
-                <option value="{{.ID}}" {{if eq $.SugPayeeID .ID}}selected{{end}}>{{.Name}}</option>
+                <option value="{{.Name}}" data-id="{{.ID}}"></option>
                 {{end}}
-            </select>
+            </datalist>
+            <input type="hidden" id="detail-payee-id" name="payee" value="{{.SugPayeeID}}">
             {{end}}
         </div>
 
         <div class="detail-field">
-            <label for="detail-category" class="detail-label">
-                Category
-                {{if $.SugCategoryID}}<small class="auto-filled-hint">(suggested)</small>{{end}}
-            </label>
+            <label for="detail-category-input" class="detail-label">Category</label>
             {{if not .Categories}}
             <p class="detail-empty-hint">No categories &mdash; sync from <a href="/settings">Settings &rarr; Sync Categories</a> first.</p>
             {{else}}
-            <select id="detail-category" name="category" class="detail-select">
-                <option value="">Select&hellip;</option>
+            <input
+                type="text"
+                id="detail-category-input"
+                class="detail-autocomplete"
+                list="detail-categories-list"
+                placeholder="Type to search category&hellip;"
+                value="{{.SugCategoryName}}"
+                autocomplete="off"
+            >
+            <datalist id="detail-categories-list">
                 {{range .Categories}}
-                <option value="{{.ID}}" {{if eq $.SugCategoryID .ID}}selected{{end}}>{{.Name}}</option>
+                <option value="{{.Name}}" data-id="{{.ID}}"></option>
                 {{end}}
-            </select>
+            </datalist>
+            <input type="hidden" id="detail-category-id" name="category" value="{{.SugCategoryID}}">
             {{end}}
         </div>
 

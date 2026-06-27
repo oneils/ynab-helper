@@ -368,24 +368,46 @@ func (s *Server) detailBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Txn           txn.Transaction
-		BudgetID      string
-		Payees        []ynab.Payee
-		Categories    []ynab.Category
-		SugPayeeID    string
-		SugCategoryID string
-		ActiveStatus  string
+		Txn              txn.Transaction
+		BudgetID         string
+		Payees           []ynab.Payee
+		Categories       []ynab.Category
+		SugPayeeID       string
+		SugPayeeName     string
+		SugCategoryID    string
+		SugCategoryName  string
+		ActiveStatus     string
 	}{
-		Txn:           transaction,
-		BudgetID:      budget.ID,
-		Payees:        payees,
-		Categories:    categories,
-		SugPayeeID:    sugPayeeID,
-		SugCategoryID: sugCatID,
-		ActiveStatus:  activeStatus,
+		Txn:              transaction,
+		BudgetID:         budget.ID,
+		Payees:           payees,
+		Categories:       categories,
+		SugPayeeID:       sugPayeeID,
+		SugPayeeName:     payeeNameByID(payees, sugPayeeID),
+		SugCategoryID:    sugCatID,
+		SugCategoryName:  categoryNameByID(categories, sugCatID),
+		ActiveStatus:     activeStatus,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "txn-detail-panel", data)
+}
+
+func payeeNameByID(payees []ynab.Payee, id string) string {
+	for _, p := range payees {
+		if p.ID == id {
+			return p.Name
+		}
+	}
+	return ""
+}
+
+func categoryNameByID(categories []ynab.Category, id string) string {
+	for _, c := range categories {
+		if c.ID == id {
+			return c.Name
+		}
+	}
+	return ""
 }
 
 func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {

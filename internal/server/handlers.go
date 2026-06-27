@@ -64,6 +64,7 @@ func (s *Server) indexHandler(w http.ResponseWriter, r *http.Request) {
 		Budgets []ynab.Budget
 		Accs    []ynab.Account
 		Txns    []TxnListRow
+		Account string
 	}{
 		Budgets: budgets,
 	}

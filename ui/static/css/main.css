@@ -136,6 +136,8 @@ body {
     font-weight: 500;
     font-size: var(--font-size-lg);
     color: var(--text-primary);
+    text-decoration: none;
+    cursor: pointer;
 }
 
 .sidebar-nav {

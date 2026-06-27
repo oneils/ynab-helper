@@ -1,14 +1,13 @@
 /*
- * Detail Panel — autocomplete ID sync + dynamic category suggestions
+ * Detail Panel — payee/category select sync + dynamic category suggestions
  *
  * Manual test checklist:
- *   [ ] Typing partial payee name filters the datalist options
- *   [ ] Selecting a payee sets hidden #detail-payee-id to correct UUID (not name)
- *   [ ] After payee select, category datalist updates with suggestions for that payee
- *   [ ] Selecting a category NOT in the payee suggestions still works (type its name, correct ID submitted)
- *   [ ] Clearing the payee restores the full category list and clears category input
- *   [ ] Selecting a category sets hidden #detail-category-id to correct UUID (not name)
- *   [ ] Form submission (Accept & Send to YNAB) sends payee ID and category ID, not display names
+ *   [ ] Payee dropdown shows all payees; suggested payee is pre-selected
+ *   [ ] Category dropdown shows all categories; suggested category is pre-selected
+ *   [ ] Selecting a payee fetches category suggestions and narrows the category dropdown
+ *   [ ] If only one category suggestion, it is auto-selected
+ *   [ ] Clearing the payee restores the full category list and clears category selection
+ *   [ ] Form submission sends payee ID and category ID (not display names)
  *   [ ] Clicking a second transaction re-initializes the panel correctly (JS rebound after HTMX swap)
  */
 
@@ -21,42 +20,22 @@
     // Guards against stale fetch responses when payee changes rapidly.
     var latestPayeeId = '';
 
-    function findOption(datalist, value) {
-        if (!datalist || !value) return null;
-        var lower = value.toLowerCase();
-        var options = datalist.querySelectorAll('option');
-        for (var i = 0; i < options.length; i++) {
-            if (options[i].value.toLowerCase() === lower) return options[i];
-        }
-        return null;
-    }
-
-    // Also searches fullCategoryOptions so a narrowed datalist doesn't lose the ID.
-    function findCategoryOption(datalist, value) {
-        var opt = findOption(datalist, value);
-        if (opt) return opt;
-        if (!value) return null;
-        var lower = value.toLowerCase();
-        for (var i = 0; i < fullCategoryOptions.length; i++) {
-            if (fullCategoryOptions[i].value.toLowerCase() === lower) return fullCategoryOptions[i];
-        }
-        return null;
-    }
-
-    function setCategoryList(options) {
-        var dl = document.getElementById('detail-categories-list');
-        if (!dl) return;
-        dl.innerHTML = '';
+    function setCategoryOptions(options) {
+        var sel = document.getElementById('detail-category-select');
+        if (!sel) return;
+        var current = sel.value;
+        sel.innerHTML = '<option value="">— Select category —</option>';
         options.forEach(function (opt) {
             var el = document.createElement('option');
             el.value = opt.value;
-            el.dataset.id = opt.dataset.id;
-            dl.appendChild(el);
+            el.textContent = opt.text;
+            if (opt.value && opt.value === current) el.selected = true;
+            sel.appendChild(el);
         });
     }
 
     function restoreFullCategoryList() {
-        setCategoryList(fullCategoryOptions);
+        setCategoryOptions(fullCategoryOptions);
     }
 
     function fetchCategorySuggestions(payeeId) {
@@ -81,20 +60,14 @@
                     restoreFullCategoryList();
                     return;
                 }
-                // Build synthetic option objects matching fullCategoryOptions shape.
                 var opts = suggestions.map(function (s) {
-                    var el = document.createElement('option');
-                    el.value = s.category_name;
-                    el.dataset.id = s.category_id;
-                    return el;
+                    return { value: s.category_id, text: s.category_name };
                 });
-                setCategoryList(opts);
-                // Auto-fill if exactly one suggestion.
+                setCategoryOptions(opts);
+                // Auto-select if exactly one suggestion.
                 if (suggestions.length === 1) {
-                    var catInput = document.getElementById('detail-category-input');
-                    var catHidden = document.getElementById('detail-category-id');
-                    if (catInput) catInput.value = suggestions[0].category_name;
-                    if (catHidden) catHidden.value = suggestions[0].category_id;
+                    var catSel = document.getElementById('detail-category-select');
+                    if (catSel) catSel.value = suggestions[0].category_id;
                 }
             })
             .catch(function () {
@@ -102,68 +75,73 @@
             });
     }
 
-    function syncPayee() {
-        var input = document.getElementById('detail-payee-input');
-        var hidden = document.getElementById('detail-payee-id');
-        if (!input || !hidden) return;
-
-        var dl = document.getElementById('detail-payees-list');
-        var opt = findOption(dl, input.value.trim());
-
-        if (opt && opt.dataset.id) {
-            hidden.value = opt.dataset.id;
-            fetchCategorySuggestions(opt.dataset.id);
-        } else {
-            hidden.value = '';
-            latestPayeeId = '';
-            restoreFullCategoryList();
-            // Also clear category when payee is cleared.
-            if (!input.value.trim()) {
-                var catInput = document.getElementById('detail-category-input');
-                var catHidden = document.getElementById('detail-category-id');
-                if (catInput) catInput.value = '';
-                if (catHidden) catHidden.value = '';
-            }
-        }
+    function updateRememberToggleState() {
+        var row = document.querySelector('.remember-toggle-row');
+        if (!row) return;
+        var payeeSel = document.getElementById('detail-payee-select');
+        var catSel = document.getElementById('detail-category-select');
+        var ready = payeeSel && payeeSel.value && catSel && catSel.value;
+        row.classList.toggle('disabled', !ready);
     }
 
-    function syncCategory() {
-        var input = document.getElementById('detail-category-input');
-        var hidden = document.getElementById('detail-category-id');
-        if (!input || !hidden) return;
+    function onPayeeChange() {
+        var payeeSel = document.getElementById('detail-payee-select');
+        var payeeId = payeeSel ? payeeSel.value : '';
 
-        var dl = document.getElementById('detail-categories-list');
-        var opt = findCategoryOption(dl, input.value.trim());
+        if (payeeId) {
+            fetchCategorySuggestions(payeeId);
+        } else {
+            latestPayeeId = '';
+            restoreFullCategoryList();
+            var catSel = document.getElementById('detail-category-select');
+            if (catSel) catSel.value = '';
+        }
+        updateRememberToggleState();
+    }
 
-        hidden.value = (opt && opt.dataset.id) ? opt.dataset.id : '';
+    function onCategoryChange() {
+        updateRememberToggleState();
     }
 
     function init() {
-        // Snapshot the full category list as rendered by the server.
-        var dl = document.getElementById('detail-categories-list');
-        if (dl) {
-            fullCategoryOptions = Array.from(dl.querySelectorAll('option'));
+        // Snapshot the full category list as rendered by the server (excluding blank placeholder).
+        var catSel = document.getElementById('detail-category-select');
+        if (catSel) {
+            fullCategoryOptions = Array.from(catSel.querySelectorAll('option'))
+                .filter(function (opt) { return opt.value !== ''; })
+                .map(function (opt) {
+                    return { value: opt.value, text: opt.textContent };
+                });
         } else {
             fullCategoryOptions = [];
         }
         latestPayeeId = '';
 
-        var payeeInput = document.getElementById('detail-payee-input');
-        if (payeeInput) {
-            payeeInput.removeEventListener('change', syncPayee);
-            payeeInput.removeEventListener('blur', syncPayee);
-            payeeInput.addEventListener('change', syncPayee);
-            payeeInput.addEventListener('blur', syncPayee);
+        var payeeSel = document.getElementById('detail-payee-select');
+        if (payeeSel) {
+            payeeSel.removeEventListener('change', onPayeeChange);
+            payeeSel.addEventListener('change', onPayeeChange);
         }
 
-        var catInput = document.getElementById('detail-category-input');
-        if (catInput) {
-            catInput.removeEventListener('change', syncCategory);
-            catInput.removeEventListener('blur', syncCategory);
-            catInput.addEventListener('change', syncCategory);
-            catInput.addEventListener('blur', syncCategory);
+        var catSel = document.getElementById('detail-category-select');
+        if (catSel) {
+            catSel.removeEventListener('change', onCategoryChange);
+            catSel.addEventListener('change', onCategoryChange);
         }
+
+        updateRememberToggleState();
     }
+
+    // Block the remember toggle from firing when no payee is selected.
+    document.body.addEventListener('htmx:beforeRequest', function (e) {
+        if (!e.target || !e.target.classList.contains('remember-checkbox')) return;
+        var payeeSel = document.getElementById('detail-payee-select');
+        var catSel = document.getElementById('detail-category-select');
+        if (!payeeSel || !payeeSel.value || !catSel || !catSel.value) {
+            e.preventDefault();
+            e.target.checked = false;
+        }
+    });
 
     // Registered once outside init() so repeated HTMX panel swaps don't stack listeners.
     document.body.addEventListener('htmx:afterSettle', function (e) {

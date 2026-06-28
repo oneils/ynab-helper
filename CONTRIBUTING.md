@@ -1,5 +1,13 @@
 # Contributing
 
+Contributions are welcome. Please read this guide before submitting a pull request.
+
+## Before you start: open an issue
+
+For anything beyond a trivial typo fix, **open an issue before writing code.** Describe what you want to change and why. This avoids duplicate effort and ensures the change aligns with the project's direction before you invest time in implementation.
+
+For bugs, include steps to reproduce. For features or new bank parsers, describe the use case and attach a sample CSV if possible (anonymize any personal data first).
+
 ## Prerequisites
 
 - Go 1.25+
@@ -24,10 +32,10 @@ All tests must pass and the linter must be clean before submitting a PR.
 
 ## Adding a new bank parser
 
-Each bank has its own parser file under `internal/parser/`. Look at `pko.go`, `revolut.go`, or `santander.go` for the pattern:
+Each bank has its own parser file under `internal/parser/`. Use `pko.go`, `revolut.go`, or `santander.go` as a reference:
 
 1. Create `internal/parser/<bank>.go` implementing the `Parser` interface
-2. Add a `_test.go` file with unit tests using synthetic CSV rows
+2. Add a `_test.go` file with unit tests covering the expected CSV format
 3. Register the parser in `internal/parser/parser.go`
 
 Use clearly fictional data in tests — no real account numbers, transaction references, or balances.
@@ -48,6 +56,7 @@ See `.gitmessage` for the full reference.
 
 ## Pull requests
 
+- Open an issue first (see above)
 - Keep PRs focused — one logical change per PR
-- Reference related issues if applicable
+- Reference the related issue in the PR description
 - CI must pass (build + lint + tests)

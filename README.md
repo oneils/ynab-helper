@@ -4,6 +4,8 @@
 
 A self-hosted web app that imports CSV transaction exports from Polish banks directly into [YNAB](https://www.youneedabudget.com/), without relying on third-party bank sync partners.
 
+> **Disclaimer:** This is an unofficial community project and is not affiliated with, endorsed by, or supported by YNAB. YNAB is a registered trademark of You Need A Budget LLC.
+
 **Why?** Polish banks (Santander PL, PKO, Revolut) are not supported by YNAB's native sync. Third-party integrations require sharing banking credentials with an external service. This tool keeps your data local: export a CSV from your bank, upload it here, review, confirm — done.
 
 ## Supported banks
@@ -37,7 +39,7 @@ The app deduplicates by SHA-256 hash of each CSV line, so re-uploading the same 
 
 ## Prerequisites
 
-- A [YNAB Personal Access Token](https://api.youneedabudget.com/#authentication-overview) (Settings → Developer Settings → New Token)
+- A YNAB Personal Access Token — go to **Settings → Developer Settings → New Token** in your YNAB account. The token gives read/write access to your budgets via the [YNAB API](https://api.ynab.com). Treat it like a password: never commit it to version control.
 - Docker (recommended) or Go 1.25+
 
 ## Quick start

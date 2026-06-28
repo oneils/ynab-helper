@@ -25,7 +25,10 @@ jobs:
 
   docker:
     needs: build
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +87,9 @@ jobs:
 
   docker-merge:
     needs: docker
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8

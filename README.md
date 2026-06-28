@@ -49,8 +49,10 @@ docker run -d \
   -e YNAB_TOKEN=your_token \
   -p 8080:8080 \
   -v $(pwd)/data:/data \
-  ghcr.io/oneils/ynab-helper:latest
+  oneils/ynab-helper:latest
 ```
+
+Images are published to both [Docker Hub](https://hub.docker.com/r/oneils/ynab-helper) (`oneils/ynab-helper`) and GHCR (`ghcr.io/oneils/ynab-helper`).
 
 **Using docker compose (recommended for persistent setup):**
 

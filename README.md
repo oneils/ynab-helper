@@ -25,6 +25,16 @@ The app deduplicates by SHA-256 hash of each CSV line, so re-uploading the same 
 
 > **Account naming matters.** The parser is selected by checking whether your YNAB account name *contains* the bank name (case-insensitive). An account named `PKO Something` or `My Santander` works fine — as long as `pko` or `santander` appears somewhere in the name.
 
+### Import CSV file
+<img width="1965" height="1508" alt="image" src="https://github.com/user-attachments/assets/4ee2e317-4f80-4e2b-8344-8918ae202ffe" />
+
+<img width="1753" height="1500" alt="image" src="https://github.com/user-attachments/assets/67d16cd8-edce-4cb8-94e2-ea48bd6f63c4" />
+
+### Import History
+
+<img width="1788" height="1486" alt="image" src="https://github.com/user-attachments/assets/950b6920-667d-4fcc-b35a-37b8584d06ee" />
+
+
 ## Prerequisites
 
 - A [YNAB Personal Access Token](https://api.youneedabudget.com/#authentication-overview) (Settings → Developer Settings → New Token)

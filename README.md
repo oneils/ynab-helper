@@ -42,11 +42,23 @@ The app deduplicates by SHA-256 hash of each CSV line, so re-uploading the same 
 
 ## Quick start
 
+**Using the pre-built image (fastest):**
+
+```bash
+docker run -d \
+  -e YNAB_TOKEN=your_token \
+  -p 8080:8080 \
+  -v $(pwd)/data:/data \
+  ghcr.io/oneils/ynab-helper:latest
+```
+
+**Using docker compose (recommended for persistent setup):**
+
 ```bash
 git clone https://github.com/oneils/ynab-helper.git
 cd ynab-helper
-cp .env.example .env        # then fill in YNAB_TOKEN
-docker compose up
+cp .env.example .env        # fill in YNAB_TOKEN
+docker compose up -d
 ```
 
 Open [http://localhost:8080](http://localhost:8080).

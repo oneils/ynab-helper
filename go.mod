@@ -3,7 +3,7 @@ module github.com/oneils/ynab-helper
 go 1.25.7
 
 require (
-	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-chi/chi/v5 v5.3.1
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/pressly/goose/v3 v3.27.1
 	golang.org/x/text v0.38.0

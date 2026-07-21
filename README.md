@@ -6,15 +6,15 @@ A self-hosted web app that imports CSV transaction exports from Polish banks dir
 
 > **Disclaimer:** This is an unofficial community project and is not affiliated with, endorsed by, or supported by YNAB. YNAB is a registered trademark of You Need A Budget LLC.
 
-**Why?** Polish banks (Santander PL, PKO, Revolut) are not supported by YNAB's native sync. Third-party integrations require sharing banking credentials with an external service. This tool keeps your data local: export a CSV from your bank, upload it here, review, confirm — done.
+**Why?** Polish banks (Santander PL, PKO, Revolut, Millennium) are not supported by YNAB's native sync. Third-party integrations require sharing banking credentials with an external service. This tool keeps your data local: export a CSV from your bank, upload it here, review, confirm — done.
 
 ## Supported banks
 
 - [x] Santander Polska
 - [x] Revolut
 - [x] PKO
+- [x] Millennium
 - [ ] ING
-- [ ] Millennium
 
 ## How it works
 

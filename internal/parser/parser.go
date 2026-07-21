@@ -15,6 +15,7 @@ const (
 	SantanderBankName = "Santander"
 	RevolutBankName   = "Revolut"
 	PKOBankName       = "PKO"
+	MilleniumBankName = "Millennium"
 )
 
 //go:generate moq -out hasher_mock.go -fmt goimports . Hasher

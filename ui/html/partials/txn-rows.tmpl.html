@@ -3,7 +3,7 @@
 <tr id="txn-row-{{$row.Txn.ID}}"
     class="txn-row"
     data-txn-id="{{$row.Txn.ID}}"
-    hx-get="/bank-txns/{{$row.Txn.ID}}/detail?account={{$row.Txn.Account.ID}}"
+    hx-get="/bank-txns/{{$row.Txn.ID}}/detail?account={{$row.Txn.Account.ID}}&status={{$.ActiveStatus}}"
     hx-target="#txn-detail-panel"
     hx-swap="innerHTML"
     hx-on::after-request="document.querySelectorAll('.txn-row--selected').forEach(function(el){el.classList.remove('txn-row--selected')}); this.classList.add('txn-row--selected'); document.getElementById('txn-detail-panel').classList.add('txn-detail-panel--open')"

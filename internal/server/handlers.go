@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -621,6 +622,7 @@ func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  budget.ID,
 		AccountID: accID,
+		Status:    activeStatus,
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -637,24 +639,28 @@ func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 		statusCountsStr[string(k)] = v
 	}
 
+	rows := enrichTransactionList(r.Context(), txns,
+		s.Syncer.FindBudgetByAccID,
+		func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
+			return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
+		},
+		func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
+			return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
+		},
+		s.Syncer.FetchPayeesByBudget,
+		s.TxnProcessor.SuggestPayee,
+	)
+
 	data := struct {
 		Txns         []TxnListRow
+		PageMeta     PageMeta
 		Budget       string
 		Account      string
 		ActiveStatus string
 		StatusCounts map[string]int
 	}{
-		Txns: enrichTransactionList(r.Context(), txns,
-			s.Syncer.FindBudgetByAccID,
-			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
-				return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
-			},
-			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
-				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
-			},
-			s.Syncer.FetchPayeesByBudget,
-			s.TxnProcessor.SuggestPayee,
-		),
+		Txns:         rows,
+		PageMeta:     PageMeta{},
 		Budget:       budget.ID,
 		Account:      accID,
 		ActiveStatus: activeStatus,
@@ -732,6 +738,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  form.BudgetID,
 		AccountID: form.AccountID,
+		Status:    activeStatus,
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -750,6 +757,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 
 	data := struct {
 		Txns         []TxnListRow
+		PageMeta     PageMeta
 		Budget       string
 		Account      string
 		ActiveStatus string
@@ -766,6 +774,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 			s.Syncer.FetchPayeesByBudget,
 			s.TxnProcessor.SuggestPayee,
 		),
+		PageMeta:     PageMeta{},
 		Budget:       form.BudgetID,
 		Account:      form.AccountID,
 		ActiveStatus: activeStatus,
@@ -802,6 +811,52 @@ func (s *Server) settingsViewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", baseTmpl, data)
+}
+
+// ParserMappingRow is a view-model for a parser mapping table row.
+type ParserMappingRow struct {
+	Account    ynab.Account
+	ParserName string
+}
+
+func (s *Server) parserMappingsHandler(w http.ResponseWriter, r *http.Request) {
+	budgetID := r.URL.Query().Get("budget")
+
+	budget, err := s.Syncer.FindBudgetByID(r.Context(), budgetID)
+	if err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		return
+	}
+
+	rows := make([]ParserMappingRow, 0, len(budget.Accounts))
+	for _, acc := range budget.Accounts {
+		parserName, err := s.DB.ParserMappingStore().GetParserMapping(r.Context(), acc.ID)
+		if err != nil {
+			s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+			return
+		}
+		rows = append(rows, ParserMappingRow{Account: acc, ParserName: parserName})
+	}
+
+	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "parser-mapping-rows", rows)
+}
+
+func (s *Server) saveParserMappingHandler(w http.ResponseWriter, r *http.Request) {
+	accountID := chi.URLParam(r, "accountID")
+	parserName := r.FormValue("parser_name")
+
+	if parserName != "" && !slices.Contains(s.TxnProcessor.ParserNames(), parserName) {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, fmt.Sprintf("unknown parser %q", parserName))
+		return
+	}
+
+	if err := s.DB.ParserMappingStore().SaveParserMapping(r.Context(), accountID, parserName); err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		return
+	}
+
+	w.Header().Set("HX-Trigger", `{"showToast": {"message": "Parser mapping saved", "type": "success"}}`)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) syncBudgetsHandler(w http.ResponseWriter, r *http.Request) {
@@ -968,12 +1023,14 @@ func (s *Server) uploadBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		Txns         []TxnListRow
+		PageMeta     PageMeta
 		Budget       string
 		Account      string
 		ActiveStatus string
 		StatusCounts map[string]int
 	}{
 		Txns:         wrapTransactions(txns),
+		PageMeta:     PageMeta{},
 		Budget:       budgetID,
 		Account:      accID,
 		ActiveStatus: activeStatus,
@@ -1233,6 +1290,7 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 
 	responseData := struct {
 		Txns         []TxnListRow
+		PageMeta     PageMeta
 		Budget       string
 		Account      string
 		ActiveStatus string
@@ -1249,6 +1307,7 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 			s.Syncer.FetchPayeesByBudget,
 			s.TxnProcessor.SuggestPayee,
 		),
+		PageMeta:     PageMeta{},
 		Budget:       form.BudgetID,
 		Account:      form.AccountID,
 		ActiveStatus: r.URL.Query().Get("status"),
@@ -1319,6 +1378,7 @@ func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
 	// Re-render transaction list
 	data := struct {
 		Txns         []TxnListRow
+		PageMeta     PageMeta
 		Budget       string
 		Account      string
 		ActiveStatus string
@@ -1335,6 +1395,7 @@ func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
 			s.Syncer.FetchPayeesByBudget,
 			s.TxnProcessor.SuggestPayee,
 		),
+		PageMeta:     PageMeta{},
 		Budget:       budget.ID,
 		Account:      accID,
 		ActiveStatus: "",

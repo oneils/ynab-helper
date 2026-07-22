@@ -37,6 +37,11 @@ type YnabUploader interface {
 	Upload(txn ynab.TxnReq) error
 }
 
+// ParserMappingLookup looks up the configured parser for an account.
+type ParserMappingLookup interface {
+	GetParserMapping(ctx context.Context, accountID string) (string, error)
+}
+
 // Processor handles transaction processing and storage.
 type Processor struct {
 	parsers          map[string]ReportParser
@@ -44,17 +49,28 @@ type Processor struct {
 	budgetStore      BudgetFinder
 	client           YnabUploader
 	suggestionEngine *SuggestionEngine
+	mappingStore     ParserMappingLookup
 }
 
 // NewProcessor creates a new transaction processor.
-func NewProcessor(parsers map[string]ReportParser, txnStore TransactionStorer, budgetStore BudgetFinder, client YnabUploader, suggestionEngine *SuggestionEngine) *Processor {
+func NewProcessor(parsers map[string]ReportParser, txnStore TransactionStorer, budgetStore BudgetFinder, client YnabUploader, suggestionEngine *SuggestionEngine, mappingStore ParserMappingLookup) *Processor {
 	return &Processor{
 		parsers:          parsers,
 		txnStore:         txnStore,
 		budgetStore:      budgetStore,
 		client:           client,
 		suggestionEngine: suggestionEngine,
+		mappingStore:     mappingStore,
 	}
+}
+
+// ParserNames returns the names of registered report parsers.
+func (p *Processor) ParserNames() []string {
+	names := make([]string, 0, len(p.parsers))
+	for name := range p.parsers {
+		names = append(names, name)
+	}
+	return names
 }
 
 // ProcessParams contains parameters for processing transactions.
@@ -128,18 +144,16 @@ func (p *Processor) Process(ctx context.Context, params ProcessParams) error {
 		}
 	}
 
-	// Find parser by account name
-	var reportParser ReportParser
-	searchKey := strings.ToLower(accName)
-	for key := range p.parsers {
-		if strings.Contains(searchKey, strings.ToLower(key)) {
-			reportParser = p.parsers[key]
-			break
-		}
+	parserName, err := p.mappingStore.GetParserMapping(ctx, params.AccountID)
+	if err != nil {
+		return fmt.Errorf("looking up parser mapping: %w", err)
 	}
-
+	if parserName == "" {
+		return fmt.Errorf("no parser mapped for account [%s] — configure it in Settings > Parser Mappings", accName)
+	}
+	reportParser := p.parsers[parserName]
 	if reportParser == nil {
-		return fmt.Errorf("no parser found for account [%s]", accName)
+		return fmt.Errorf("parser %q is not registered", parserName)
 	}
 
 	txns := reportParser.Parse(BankAccount{
@@ -202,24 +216,22 @@ func (p *Processor) Preview(ctx context.Context, params ProcessParams) (*Preview
 		}
 	}
 
-	// Find parser by account name and detect format
-	var reportParser ReportParser
-	var detectedFormat string
-	searchKey := strings.ToLower(accName)
-	for key := range p.parsers {
-		if strings.Contains(searchKey, strings.ToLower(key)) {
-			reportParser = p.parsers[key]
-			detectedFormat = key
-			break
-		}
+	parserName, err := p.mappingStore.GetParserMapping(ctx, params.AccountID)
+	if err != nil {
+		return nil, fmt.Errorf("looking up parser mapping: %w", err)
 	}
-
-	if reportParser == nil {
+	if parserName == "" {
 		return &PreviewResult{
-			DetectedFormat:   "",
-			ValidationErrors: []string{fmt.Sprintf("No parser found for account [%s]", accName)},
+			ValidationErrors: []string{fmt.Sprintf("no parser mapped for account [%s] — configure it in Settings > Parser Mappings", accName)},
 		}, nil
 	}
+	reportParser := p.parsers[parserName]
+	if reportParser == nil {
+		return &PreviewResult{
+			ValidationErrors: []string{fmt.Sprintf("parser %q is not registered", parserName)},
+		}, nil
+	}
+	detectedFormat := parserName
 
 	// Parse transactions
 	txns := reportParser.Parse(BankAccount{
@@ -327,8 +339,6 @@ func (p *Processor) SuggestPayee(t Transaction, payees []ynab.Payee) ynab.Payee 
 	}
 	return ynab.Payee{}
 }
-
-
 
 // parseYnabTime parses a date string in YNAB format.
 func (p *Processor) parseYnabTime(dateStr string) (string, error) {

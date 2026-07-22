@@ -194,6 +194,46 @@ func TestSantanderParser_EdgeCases(t *testing.T) {
 	})
 }
 
+// TestSantanderParser_RealWorldData_StableHashAcrossReExport verifies that the same
+// transaction re-exported with a different balance/counter (columns 7-8) produces
+// the same ID when HashColumns is configured.
+func TestSantanderParser_RealWorldData_StableHashAcrossReExport(t *testing.T) {
+	fixedTime := time.Date(2025, 12, 29, 12, 0, 0, 0, time.UTC)
+	cfg := Config{
+		TransactionDateIndex: 1,
+		DescriptionIndex:     2,
+		AmountIndex:          5,
+		DateFormat:           "02-01-2006",
+		BankName:             SantanderBankName,
+		ColumnsAmount:        9,
+		Header: HeaderCfg{
+			HasHeader: false,
+		},
+		HashColumns: []int{1, 2, 3, 4, 5},
+	}
+
+	parser := NewSantanderParser(cfg, sha256.New(), &mockTimeProvider{fixedTime: fixedTime})
+	acc := txn.BankAccount{ID: "santander-acc-123", Name: "Santander Personal Account"}
+
+	firstExport := [][]string{
+		{"", "15-12-2025", "Zakup BLIK JMP S.A. BIEDRONKA AL. RZECZYPOSPOLITEJ . ref:00000000000", "JMP S.A. BIEDRONKA AL. RZECZYPOSPOLITEJ .", "72 0000 0000 0000 0000 0000 0001", "-2,99", "", "1000,00", "29"},
+	}
+	secondExport := [][]string{
+		{"", "15-12-2025", "Zakup BLIK JMP S.A. BIEDRONKA AL. RZECZYPOSPOLITEJ . ref:00000000000", "JMP S.A. BIEDRONKA AL. RZECZYPOSPOLITEJ .", "72 0000 0000 0000 0000 0000 0001", "-2,99", "", "1500,00", "31"},
+	}
+
+	firstResults := parser.Parse(acc, firstExport)
+	secondResults := parser.Parse(acc, secondExport)
+
+	if len(firstResults) != 1 || len(secondResults) != 1 {
+		t.Fatalf("Expected 1 transaction per export")
+	}
+
+	if firstResults[0].ID != secondResults[0].ID {
+		t.Errorf("Expected same ID across re-export with changed balance/counter, got %s vs %s", firstResults[0].ID, secondResults[0].ID)
+	}
+}
+
 // TestSantanderParser_UniqueTransactionIDs ensures each transaction gets a unique ID
 func TestSantanderParser_UniqueTransactionIDs(t *testing.T) {
 	fixedTime := time.Date(2025, 12, 29, 12, 0, 0, 0, time.UTC)

@@ -1862,6 +1862,110 @@ select.detail-select {
     color: var(--ui-primary);
 }
 
+/* ── Searchable select widget ────────────────────────────────────────────── */
+
+.ss-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.ss-trigger {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-right: calc(var(--spacing-md) * 2.5);
+    font-size: var(--font-size-base, 1rem);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--bg-border);
+    border-radius: var(--radius-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--transition-base);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ss-trigger::after {
+    content: '▾';
+    position: absolute;
+    right: var(--spacing-md);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.ss-trigger:focus {
+    outline: none;
+    border-color: var(--ui-primary);
+    box-shadow: 0 0 0 2px var(--ui-primary-light);
+}
+
+.ss-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: var(--bg-elevated);
+    border: 1px solid var(--bg-border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    /* display controlled via JS style.display */
+    flex-direction: column;
+    max-height: 400px;
+}
+
+.ss-search {
+    flex-shrink: 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base, 1rem);
+    background: transparent;
+    color: var(--text-primary);
+    border: none;
+    border-bottom: 1px solid var(--bg-border);
+    outline: none;
+}
+
+.ss-search::placeholder {
+    color: var(--text-muted);
+}
+
+.ss-list {
+    list-style: none;
+    margin: 0;
+    padding: var(--spacing-xs) 0;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.ss-option {
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    font-size: var(--font-size-base, 1rem);
+    color: var(--text-primary);
+    outline: none;
+}
+
+.ss-option:hover,
+.ss-option:focus {
+    background: var(--ui-primary-light);
+    color: var(--ui-primary);
+}
+
+.ss-option.ss-selected {
+    color: var(--ui-primary);
+    font-weight: 600;
+}
+
+.ss-empty {
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
 /* Remember Selections toggle */
 .remember-toggle-row {
     display: flex;

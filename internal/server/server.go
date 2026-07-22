@@ -39,6 +39,8 @@ func (s *Server) routes() chi.Router {
 
 		r.Get("/about", s.aboutViewHandler)
 		r.Get("/settings", s.settingsViewHandler)
+		r.Get("/settings/parser-mappings", s.parserMappingsHandler)
+		r.Post("/settings/parser-mappings/{accountID}", s.saveParserMappingHandler)
 		r.Get("/import-bank-txns", s.importBankTxnsHandler)
 		r.Get("/accounts", s.accountsHandler)
 

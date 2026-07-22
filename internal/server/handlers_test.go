@@ -430,6 +430,31 @@ func TestCategoryNameByID(t *testing.T) {
 	}
 }
 
+func TestParserMappingRoutesExist(t *testing.T) {
+	s := &Server{}
+
+	wantRoutes := map[string]string{
+		"GET":  "/settings/parser-mappings",
+		"POST": "/settings/parser-mappings/{accountID}",
+	}
+	found := map[string]bool{}
+
+	_ = chi.Walk(s.routes(), func(method, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		for m, r := range wantRoutes {
+			if method == m && route == r {
+				found[m+" "+r] = true
+			}
+		}
+		return nil
+	})
+
+	for m, r := range wantRoutes {
+		if !found[m+" "+r] {
+			t.Errorf("expected route %s %s to exist", m, r)
+		}
+	}
+}
+
 func TestDetailRoute_SaveInlineStillExists(t *testing.T) {
 	s := &Server{}
 

@@ -6,26 +6,27 @@ A self-hosted web app that imports CSV transaction exports from Polish banks dir
 
 > **Disclaimer:** This is an unofficial community project and is not affiliated with, endorsed by, or supported by YNAB. YNAB is a registered trademark of You Need A Budget LLC.
 
-**Why?** Polish banks (Santander PL, PKO, Revolut) are not supported by YNAB's native sync. Third-party integrations require sharing banking credentials with an external service. This tool keeps your data local: export a CSV from your bank, upload it here, review, confirm — done.
+**Why?** Polish banks (Santander PL, PKO, Revolut, Millennium) are not supported by YNAB's native sync. Third-party integrations require sharing banking credentials with an external service. This tool keeps your data local: export a CSV from your bank, upload it here, review, confirm — done.
 
 ## Supported banks
 
 - [x] Santander Polska
 - [x] Revolut
 - [x] PKO
+- [x] Millennium
 - [ ] ING
-- [ ] Millennium
 
 ## How it works
 
-1. Export a transaction CSV from your bank's web interface
-2. In ynab-helper, select your YNAB budget and account, upload the CSV
-3. Review the preview — new vs. duplicate transactions are highlighted
-4. Confirm the import; transactions are pushed to YNAB
+1. In **Settings → Parser Mappings**, map each YNAB account to the bank parser used for its statements
+2. Export a transaction CSV from your bank's web interface
+3. In ynab-helper, select your YNAB budget and account, upload the CSV
+4. Review the preview — new vs. duplicate transactions are highlighted
+5. Confirm the import; transactions are pushed to YNAB
 
-The app deduplicates by SHA-256 hash of each CSV line, so re-uploading the same file or an overlapping export is safe.
+The app deduplicates by hashing a stable subset of each transaction's fields (excluding volatile columns like running balance or settlement date, which can change between exports of the same real-world transaction), so re-uploading the same file or an overlapping export is safe.
 
-> **Account naming matters.** The parser is selected by checking whether your YNAB account name *contains* the bank name (case-insensitive). An account named `PKO Something` or `My Santander` works fine — as long as `pko` or `santander` appears somewhere in the name.
+> **Parser mapping required.** Each YNAB account must be explicitly mapped to a bank parser in **Settings → Parser Mappings** before you can upload a CSV for it. Uploads for unmapped accounts fail with a clear error until you set the mapping.
 
 ### Import CSV file
 <img width="1965" height="1508" alt="image" src="https://github.com/user-attachments/assets/4ee2e317-4f80-4e2b-8344-8918ae202ffe" />
@@ -100,6 +101,7 @@ SQLite with automatic migrations on startup.
 | `categories` | YNAB categories |
 | `payees` | YNAB payees |
 | `sync_history` | Last sync timestamps per entity type |
+| `account_parser_mappings` | Per-account bank parser assignments configured in Settings |
 
 ## Transaction statuses
 

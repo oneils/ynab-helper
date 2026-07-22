@@ -4,33 +4,30 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/oneils/ynab-helper/internal/txn"
 )
 
-const santanderPattern = `PŁATNOŚĆ KARTĄ ([\d.]+) PLN ([A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż0-9\s]+)|Zakup BLIK ([A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż0-9\s]+)`
-
-// SantanderParser parses Santander bank CSV exports.
-type SantanderParser struct {
+// MilleniumParser parses Bank Millennium CSV exports.
+type MilleniumParser struct {
 	cfg          Config
 	hasher       Hasher
 	timeProvider TimeProvider
 }
 
-// NewSantanderParser creates a new SantanderParser.
-func NewSantanderParser(cfg Config, hasher Hasher, timeProvider TimeProvider) SantanderParser {
-	return SantanderParser{
+// NewMilleniumParser creates a new MilleniumParser.
+func NewMilleniumParser(cfg Config, hasher Hasher, timeProvider TimeProvider) MilleniumParser {
+	return MilleniumParser{
 		cfg:          cfg,
 		hasher:       hasher,
 		timeProvider: timeProvider,
 	}
 }
 
-// Parse parses Santander CSV data into transactions.
-func (p SantanderParser) Parse(acc txn.BankAccount, data [][]string) []txn.Transaction {
+// Parse parses Millennium CSV data into transactions.
+func (p MilleniumParser) Parse(acc txn.BankAccount, data [][]string) []txn.Transaction {
 	var txns []txn.Transaction
 
 	if len(data) == 0 {
@@ -59,9 +56,9 @@ func (p SantanderParser) Parse(acc txn.BankAccount, data [][]string) []txn.Trans
 			continue
 		}
 
-		amount, err := getAmount(p.cfg.AmountIndex, row)
+		amount, err := getMilleniumAmount(row, p.cfg.AmountIndex, p.cfg.AmountIndex+1)
 		if err != nil {
-			errMsg := fmt.Sprintf("invalid amount [%s] at line %d. Error: %s", row[p.cfg.AmountIndex], lineNumber, err.Error())
+			errMsg := fmt.Sprintf("invalid amount at line %d. Error: %s", lineNumber, err.Error())
 			txns = append(txns, txn.Transaction{
 				Account:       acc,
 				Status:        txn.TransactionInvalid,
@@ -77,11 +74,11 @@ func (p SantanderParser) Parse(acc txn.BankAccount, data [][]string) []txn.Trans
 		location, _ := time.LoadLocation(warsawLocation)
 		date, err := time.ParseInLocation(p.cfg.DateFormat, row[p.cfg.TransactionDateIndex], location)
 		if err != nil {
-			errMsg := fmt.Sprintf("invalid transaction time [%s] at line %d: %s", row[p.cfg.AmountIndex], lineNumber, err.Error())
+			errMsg := fmt.Sprintf("invalid transaction time [%s] at line %d: %s", row[p.cfg.TransactionDateIndex], lineNumber, err.Error())
 			txns = append(txns, txn.Transaction{
 				Account:       acc,
-				RawLineNumber: lineNumber,
 				Status:        txn.TransactionInvalid,
+				RawLineNumber: lineNumber,
 				RawText:       rowString,
 				ErrorMsg:      errMsg,
 				CreatedAt:     createdAt,
@@ -89,8 +86,6 @@ func (p SantanderParser) Parse(acc txn.BankAccount, data [][]string) []txn.Trans
 			slog.Warn(errMsg)
 			continue
 		}
-
-		payee := p.shopName(row[p.cfg.DescriptionIndex])
 
 		p.hasher.Reset()
 		if _, err = p.hasher.Write([]byte(buildHashInput(p.cfg, row))); err != nil {
@@ -117,7 +112,7 @@ func (p SantanderParser) Parse(acc txn.BankAccount, data [][]string) []txn.Trans
 			CreatedAt:   createdAt,
 			TxnTime:     date,
 			Status:      txn.TransactionDraft,
-			Payee:       payee,
+			Payee:       row[p.cfg.DescriptionIndex],
 			RawText:     rowString,
 		})
 	}
@@ -125,26 +120,25 @@ func (p SantanderParser) Parse(acc txn.BankAccount, data [][]string) []txn.Trans
 	return txns
 }
 
-func (p SantanderParser) shopName(text string) string {
-	re := regexp.MustCompile(santanderPattern)
-	matches := re.FindAllStringSubmatch(text, -1)
-
-	if len(matches) == 0 {
-		return ""
-	}
-
-	match := matches[0]
-
-	var shopName string
-	if len(match) >= 3 && match[3] != "" {
-		shopName = match[3]
-	} else if len(match) >= 3 {
-		shopName = match[2]
-		if strings.Contains(shopName, " ") && !strings.HasSuffix(shopName, " ") {
-			parts := strings.Split(shopName, " ")
-			shopName = parts[0]
+// getMilleniumAmount extracts the amount from Millennium's two-column debit/credit layout.
+// Exactly one of the debit or credit columns is expected to be non-empty; the debit
+// value is already pre-signed negative and must not be negated.
+func getMilleniumAmount(row []string, debitIdx, creditIdx int) (float64, error) {
+	if row[debitIdx] != "" {
+		amount, err := getAmount(debitIdx, row)
+		if err != nil {
+			return 0, fmt.Errorf("invalid debit amount [%s]: %w", row[debitIdx], err)
 		}
+		return amount, nil
 	}
 
-	return strings.TrimSpace(shopName)
+	if row[creditIdx] != "" {
+		amount, err := getAmount(creditIdx, row)
+		if err != nil {
+			return 0, fmt.Errorf("invalid credit amount [%s]: %w", row[creditIdx], err)
+		}
+		return amount, nil
+	}
+
+	return 0, fmt.Errorf("both debit and credit columns are empty")
 }

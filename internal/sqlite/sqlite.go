@@ -28,9 +28,10 @@ type DB struct {
 	db *sql.DB
 
 	// Stores
-	ynabStore        *YnabStore
-	transactionStore *TransactionStore
-	patternStore     *PatternStore
+	ynabStore          *YnabStore
+	transactionStore   *TransactionStore
+	patternStore       *PatternStore
+	parserMappingStore *ParserMappingStore
 }
 
 // New creates a new SQLite connection and initializes all stores.
@@ -91,10 +92,11 @@ func New(cfg Config) (*DB, error) {
 	slog.Info("SQLite database initialized", "path", cfg.Path)
 
 	database := &DB{
-		db:               db,
-		ynabStore:        NewYnabStore(db),
-		transactionStore: NewTransactionStore(db),
-		patternStore:     NewPatternStore(db),
+		db:                 db,
+		ynabStore:          NewYnabStore(db),
+		transactionStore:   NewTransactionStore(db),
+		patternStore:       NewPatternStore(db),
+		parserMappingStore: NewParserMappingStore(db),
 	}
 
 	return database, nil
@@ -128,6 +130,11 @@ func (db *DB) TransactionStore() *TransactionStore {
 // PatternStore returns the pattern store.
 func (db *DB) PatternStore() *PatternStore {
 	return db.patternStore
+}
+
+// ParserMappingStore returns the parser mapping store.
+func (db *DB) ParserMappingStore() *ParserMappingStore {
+	return db.parserMappingStore
 }
 
 // runMigrations runs database migrations using goose.

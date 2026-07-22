@@ -57,11 +57,12 @@ func New(cfg Config) (*App, error) {
 		parser.SantanderBankName: parser.NewSantanderParser(santanderConfig(), sha256.New(), timeProvider),
 		parser.RevolutBankName:   parser.NewRevolutParser(revolutConfig(), sha256.New(), timeProvider),
 		parser.PKOBankName:       parser.NewPKOParser(pkoConfig(), sha256.New(), timeProvider),
+		parser.MilleniumBankName: parser.NewMilleniumParser(milleniumConfig(), sha256.New(), timeProvider),
 	}
 
 	// Wire smart suggestions
 	suggestionEngine := txn.NewSuggestionEngine(patternStore)
-	txnProcessor := txn.NewProcessor(parsers, txnStore, ynabStore, ynabClient, suggestionEngine)
+	txnProcessor := txn.NewProcessor(parsers, txnStore, ynabStore, ynabClient, suggestionEngine, db.ParserMappingStore())
 
 	templateCache, err := server.NewTemplateCache()
 	if err != nil {
@@ -113,6 +114,7 @@ func santanderConfig() parser.Config {
 			HasHeader:      true,
 			ValidateHeader: false,
 		},
+		HashColumns: []int{1, 2, 3, 4, 5},
 	}
 }
 
@@ -144,5 +146,21 @@ func pkoConfig() parser.Config {
 			HasHeader:      true,
 			ValidateHeader: false,
 		},
+	}
+}
+
+func milleniumConfig() parser.Config {
+	return parser.Config{
+		TransactionDateIndex: 1,
+		DescriptionIndex:     6,
+		AmountIndex:          7,
+		CurrencyIndex:        10,
+		DateFormat:           "2006-01-02",
+		BankName:             parser.MilleniumBankName,
+		ColumnsAmount:        11,
+		Header: parser.HeaderCfg{
+			HasHeader: true,
+		},
+		HashColumns: []int{0, 1, 3, 4, 5, 6, 7, 8, 10},
 	}
 }

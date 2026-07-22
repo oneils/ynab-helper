@@ -88,7 +88,7 @@ func (p MilleniumParser) Parse(acc txn.BankAccount, data [][]string) []txn.Trans
 		}
 
 		p.hasher.Reset()
-		if _, err = p.hasher.Write([]byte(rowString)); err != nil {
+		if _, err = p.hasher.Write([]byte(buildHashInput(p.cfg, row))); err != nil {
 			errMsg := fmt.Sprintf("can't generate hash for raw string[%s] at line %d: %s", rowString, lineNumber, err.Error())
 			txns = append(txns, txn.Transaction{
 				Account:       acc,
@@ -113,6 +113,7 @@ func (p MilleniumParser) Parse(acc txn.BankAccount, data [][]string) []txn.Trans
 			TxnTime:     date,
 			Status:      txn.TransactionDraft,
 			Payee:       row[p.cfg.DescriptionIndex],
+			RawText:     rowString,
 		})
 	}
 

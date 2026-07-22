@@ -325,6 +325,125 @@ func TestMilleniumParser_Parse_BothAmountsPopulated(t *testing.T) {
 	}
 }
 
+// TestMilleniumParser_HashColumns_SameIDForVaryingSettlementDateAndSaldo verifies that
+// two rows identical in columns 0,1,3-8,10 but differing in settlement date (col 2)
+// and Saldo (col 9) produce the same ID, so re-exports don't create duplicates.
+func TestMilleniumParser_HashColumns_SameIDForVaryingSettlementDateAndSaldo(t *testing.T) {
+	fixedTime := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	cfg := milleniumConfigForTest()
+	cfg.Header = HeaderCfg{HasHeader: false}
+	cfg.HashColumns = []int{0, 1, 3, 4, 5, 6, 7, 8, 10}
+
+	parser := NewMilleniumParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+	account := txn.BankAccount{ID: "acc-123", Name: "Test"}
+
+	data := [][]string{
+		{"123", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP", "-16.55", "", "1000.00", "PLN"},
+		{"123", "2026-06-29", "2026-07-01", "ZAKUP", "", "", "SHOP", "-16.55", "", "1050.00", "PLN"},
+	}
+
+	results := parser.Parse(account, data)
+
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 transactions, got %d", len(results))
+	}
+	if results[0].ID != results[1].ID {
+		t.Errorf("Expected same ID for rows differing only in settlement date/Saldo, got %s vs %s", results[0].ID, results[1].ID)
+	}
+}
+
+// TestMilleniumParser_HashColumns_DifferentIDForDifferentDescriptionOrAmount verifies that
+// two rows differing in description or amount produce different IDs.
+func TestMilleniumParser_HashColumns_DifferentIDForDifferentDescriptionOrAmount(t *testing.T) {
+	fixedTime := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	cfg := milleniumConfigForTest()
+	cfg.Header = HeaderCfg{HasHeader: false}
+	cfg.HashColumns = []int{0, 1, 3, 4, 5, 6, 7, 8, 10}
+
+	account := txn.BankAccount{ID: "acc-123", Name: "Test"}
+
+	t.Run("different description", func(t *testing.T) {
+		parser := NewMilleniumParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+		data := [][]string{
+			{"123", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP A", "-16.55", "", "1000.00", "PLN"},
+			{"123", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP B", "-16.55", "", "1000.00", "PLN"},
+		}
+		results := parser.Parse(account, data)
+		if len(results) != 2 {
+			t.Fatalf("Expected 2 transactions, got %d", len(results))
+		}
+		if results[0].ID == results[1].ID {
+			t.Error("Expected different IDs for rows differing in description")
+		}
+	})
+
+	t.Run("different amount", func(t *testing.T) {
+		parser := NewMilleniumParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+		data := [][]string{
+			{"123", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP", "-16.55", "", "1000.00", "PLN"},
+			{"123", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP", "-20.00", "", "1000.00", "PLN"},
+		}
+		results := parser.Parse(account, data)
+		if len(results) != 2 {
+			t.Fatalf("Expected 2 transactions, got %d", len(results))
+		}
+		if results[0].ID == results[1].ID {
+			t.Error("Expected different IDs for rows differing in amount")
+		}
+	})
+}
+
+// TestMilleniumParser_HashColumns_DifferentNumerProducesDifferentID verifies that
+// two rows with different Numer (col 0) and otherwise identical fields produce
+// different IDs, since Numer contributes to uniqueness.
+func TestMilleniumParser_HashColumns_DifferentNumerProducesDifferentID(t *testing.T) {
+	fixedTime := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	cfg := milleniumConfigForTest()
+	cfg.Header = HeaderCfg{HasHeader: false}
+	cfg.HashColumns = []int{0, 1, 3, 4, 5, 6, 7, 8, 10}
+
+	parser := NewMilleniumParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+	account := txn.BankAccount{ID: "acc-123", Name: "Test"}
+
+	data := [][]string{
+		{"123", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP", "-16.55", "", "1000.00", "PLN"},
+		{"124", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP", "-16.55", "", "1000.00", "PLN"},
+	}
+
+	results := parser.Parse(account, data)
+
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 transactions, got %d", len(results))
+	}
+	if results[0].ID == results[1].ID {
+		t.Error("Expected different IDs for rows differing in Numer")
+	}
+}
+
+// TestMilleniumParser_Parse_ValidTransactionHasRawText verifies RawText is populated.
+func TestMilleniumParser_Parse_ValidTransactionHasRawText(t *testing.T) {
+	fixedTime := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	cfg := milleniumConfigForTest()
+	cfg.Header = HeaderCfg{HasHeader: false}
+	cfg.HashColumns = []int{0, 1, 3, 4, 5, 6, 7, 8, 10}
+
+	parser := NewMilleniumParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+	account := txn.BankAccount{ID: "acc-123", Name: "Test"}
+
+	data := [][]string{
+		{"123", "2026-06-29", "2026-06-29", "ZAKUP", "", "", "SHOP", "-16.55", "", "1000.00", "PLN"},
+	}
+
+	results := parser.Parse(account, data)
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 transaction, got %d", len(results))
+	}
+	if results[0].RawText == "" {
+		t.Error("Expected non-empty RawText for valid transaction")
+	}
+}
+
 func TestMilleniumParser_UniqueIDs(t *testing.T) {
 	fixedTime := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	account := txn.BankAccount{ID: "acc-123", Name: "Test"}

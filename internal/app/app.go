@@ -114,6 +114,7 @@ func santanderConfig() parser.Config {
 			HasHeader:      true,
 			ValidateHeader: false,
 		},
+		HashColumns: []int{1, 2, 3, 4, 5},
 	}
 }
 
@@ -160,5 +161,6 @@ func milleniumConfig() parser.Config {
 		Header: parser.HeaderCfg{
 			HasHeader: true,
 		},
+		HashColumns: []int{0, 1, 3, 4, 5, 6, 7, 8, 10},
 	}
 }

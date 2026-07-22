@@ -23,7 +23,7 @@ A self-hosted web app that imports CSV transaction exports from Polish banks dir
 3. Review the preview — new vs. duplicate transactions are highlighted
 4. Confirm the import; transactions are pushed to YNAB
 
-The app deduplicates by SHA-256 hash of each CSV line, so re-uploading the same file or an overlapping export is safe.
+The app deduplicates by hashing a stable subset of each transaction's fields (excluding volatile columns like running balance or settlement date, which can change between exports of the same real-world transaction), so re-uploading the same file or an overlapping export is safe.
 
 > **Account naming matters.** The parser is selected by checking whether your YNAB account name *contains* the bank name (case-insensitive). An account named `PKO Something` or `My Santander` works fine — as long as `pko` or `santander` appears somewhere in the name.
 

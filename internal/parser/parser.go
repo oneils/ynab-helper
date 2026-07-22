@@ -32,6 +32,7 @@ type Config struct {
 	BankName             string
 	ColumnsAmount        int
 	Header               HeaderCfg
+	HashColumns          []int
 }
 
 // HeaderCfg represents configuration for a header.
@@ -78,4 +79,19 @@ func validColumnsAmount(expectedAmount int, row []string) error {
 		return fmt.Errorf("invalid columns amount. Expected %d, got %d", expectedAmount, len(row))
 	}
 	return nil
+}
+
+// buildHashInput builds the string used as input to the transaction ID hash.
+// When cfg.HashColumns is empty, the full row is joined (preserving existing
+// behavior for parsers that don't set it). Otherwise only the selected
+// columns are joined, excluding columns known to be unstable across exports.
+func buildHashInput(cfg Config, row []string) string {
+	if len(cfg.HashColumns) == 0 {
+		return strings.Join(row, ",")
+	}
+	parts := make([]string, 0, len(cfg.HashColumns))
+	for _, idx := range cfg.HashColumns {
+		parts = append(parts, row[idx])
+	}
+	return strings.Join(parts, ",")
 }

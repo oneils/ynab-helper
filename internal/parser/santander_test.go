@@ -339,3 +339,107 @@ func TestSantanderParser_Parse_GeneratesUniqueIDs(t *testing.T) {
 		t.Error("Expected non-empty IDs")
 	}
 }
+
+// TestSantanderParser_HashColumns_SameIDForVaryingBalanceAndCounter verifies that
+// two rows identical in columns 1-5 but differing in columns 7-8 (balance/counter)
+// produce the same ID, so re-exports don't create duplicates.
+func TestSantanderParser_HashColumns_SameIDForVaryingBalanceAndCounter(t *testing.T) {
+	fixedTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := Config{
+		TransactionDateIndex: 1,
+		DescriptionIndex:     2,
+		AmountIndex:          5,
+		DateFormat:           "02-01-2006",
+		ColumnsAmount:        9,
+		Header: HeaderCfg{
+			HasHeader: false,
+		},
+		HashColumns: []int{1, 2, 3, 4, 5},
+	}
+
+	parser := NewSantanderParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+	acc := txn.BankAccount{ID: "test-acc", Name: "Test"}
+
+	data := [][]string{
+		{"", "15-01-2025", "Zakup BLIK SHOP", "Recipient", "Account123", "-2.99", "", "1000,00", "29"},
+		{"", "15-01-2025", "Zakup BLIK SHOP", "Recipient", "Account123", "-2.99", "", "2000,00", "45"},
+	}
+
+	results := parser.Parse(acc, data)
+
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 transactions, got %d", len(results))
+	}
+
+	if results[0].ID != results[1].ID {
+		t.Errorf("Expected same ID for rows differing only in balance/counter, got %s vs %s", results[0].ID, results[1].ID)
+	}
+}
+
+// TestSantanderParser_HashColumns_DifferentIDForDifferentDescription verifies that
+// two rows differing in description produce different IDs.
+func TestSantanderParser_HashColumns_DifferentIDForDifferentDescription(t *testing.T) {
+	fixedTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := Config{
+		TransactionDateIndex: 1,
+		DescriptionIndex:     2,
+		AmountIndex:          5,
+		DateFormat:           "02-01-2006",
+		ColumnsAmount:        9,
+		Header: HeaderCfg{
+			HasHeader: false,
+		},
+		HashColumns: []int{1, 2, 3, 4, 5},
+	}
+
+	parser := NewSantanderParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+	acc := txn.BankAccount{ID: "test-acc", Name: "Test"}
+
+	data := [][]string{
+		{"", "15-01-2025", "Zakup BLIK SHOP A", "", "", "-2.99", "", "1000,00", "29"},
+		{"", "15-01-2025", "Zakup BLIK SHOP B", "", "", "-2.99", "", "1000,00", "29"},
+	}
+
+	results := parser.Parse(acc, data)
+
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 transactions, got %d", len(results))
+	}
+
+	if results[0].ID == results[1].ID {
+		t.Error("Expected different IDs for rows differing in description")
+	}
+}
+
+// TestSantanderParser_Parse_ValidTransactionHasRawText verifies RawText is populated.
+func TestSantanderParser_Parse_ValidTransactionHasRawText(t *testing.T) {
+	fixedTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := Config{
+		TransactionDateIndex: 1,
+		DescriptionIndex:     2,
+		AmountIndex:          5,
+		DateFormat:           "02-01-2006",
+		ColumnsAmount:        9,
+		Header: HeaderCfg{
+			HasHeader: false,
+		},
+		HashColumns: []int{1, 2, 3, 4, 5},
+	}
+
+	parser := NewSantanderParser(cfg, &mockHasher{}, &mockTimeProvider{fixedTime: fixedTime})
+	acc := txn.BankAccount{ID: "test-acc", Name: "Test"}
+
+	data := [][]string{
+		{"", "15-01-2025", "Zakup BLIK SHOP", "", "", "-2.99", "", "1000,00", "29"},
+	}
+
+	results := parser.Parse(acc, data)
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 transaction, got %d", len(results))
+	}
+
+	if results[0].RawText == "" {
+		t.Error("Expected non-empty RawText")
+	}
+}

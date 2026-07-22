@@ -142,6 +142,43 @@ func TestGetCurrency(t *testing.T) {
 	}
 }
 
+func TestBuildHashInput(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      Config
+		row      []string
+		expected string
+	}{
+		{
+			name:     "Empty HashColumns joins full row",
+			cfg:      Config{},
+			row:      []string{"a", "b", "c"},
+			expected: "a,b,c",
+		},
+		{
+			name:     "Non-empty HashColumns includes only selected columns",
+			cfg:      Config{HashColumns: []int{0, 2}},
+			row:      []string{"a", "b", "c"},
+			expected: "a,c",
+		},
+		{
+			name:     "HashColumns order determines output order",
+			cfg:      Config{HashColumns: []int{2, 0}},
+			row:      []string{"a", "b", "c"},
+			expected: "c,a",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildHashInput(tt.cfg, tt.row)
+			if result != tt.expected {
+				t.Errorf("buildHashInput() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestRealTimeProvider_Now(t *testing.T) {
 	// Arrange
 	provider := RealTimeProvider{}

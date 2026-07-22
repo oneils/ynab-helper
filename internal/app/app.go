@@ -62,7 +62,7 @@ func New(cfg Config) (*App, error) {
 
 	// Wire smart suggestions
 	suggestionEngine := txn.NewSuggestionEngine(patternStore)
-	txnProcessor := txn.NewProcessor(parsers, txnStore, ynabStore, ynabClient, suggestionEngine)
+	txnProcessor := txn.NewProcessor(parsers, txnStore, ynabStore, ynabClient, suggestionEngine, db.ParserMappingStore())
 
 	templateCache, err := server.NewTemplateCache()
 	if err != nil {

@@ -791,3 +791,40 @@ func TestNewPageMeta_ZeroTotal(t *testing.T) {
 		t.Errorf("expected no prev/next for empty result, got prev=%d next=%d", pm.PrevPage, pm.NextPage)
 	}
 }
+
+func TestDetectCSVComma(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want rune
+	}{
+		{
+			name: "semicolon-dominant input",
+			data: []byte("Data transakcji;Data ksiegowania;Dane kontrahenta;Tytul\n2024-01-01;2024-01-02;Foo;Bar\n"),
+			want: ';',
+		},
+		{
+			name: "comma-dominant input",
+			data: []byte("Date,Description,Amount,Currency\n2024-01-01,Foo,-10.00,PLN\n"),
+			want: ',',
+		},
+		{
+			name: "empty input",
+			data: []byte(""),
+			want: ',',
+		},
+		{
+			name: "short input",
+			data: []byte("a,b"),
+			want: ',',
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := detectCSVComma(tt.data); got != tt.want {
+				t.Errorf("detectCSVComma() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

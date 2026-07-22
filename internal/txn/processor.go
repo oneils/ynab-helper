@@ -2,10 +2,8 @@ package txn
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
 	"math"
-	"mime/multipart"
 	"strconv"
 	"strings"
 	"time"
@@ -75,12 +73,10 @@ func (p *Processor) ParserNames() []string {
 
 // ProcessParams contains parameters for processing transactions.
 type ProcessParams struct {
-	File        multipart.File
-	FileHandler *multipart.FileHeader
-	Data        [][]string // Pre-parsed CSV data (optional, for preview/confirm flow)
-	BudgetID    string
-	AccountID   string
-	Status      string
+	Data      [][]string // Pre-parsed CSV data
+	BudgetID  string
+	AccountID string
+	Status    string
 }
 
 // PreviewResult contains preview data for CSV import.
@@ -106,30 +102,9 @@ type SaveForm struct {
 	Memo       string
 }
 
-// Process parses and stores transactions from a CSV file.
+// Process parses and stores transactions from pre-parsed CSV data.
 func (p *Processor) Process(ctx context.Context, params ProcessParams) error {
-	var data [][]string
-	var err error
-
-	// Use pre-parsed data if provided (from preview/confirm flow)
-	if params.Data != nil {
-		data = params.Data
-	} else {
-		// Parse from file (original flow, backward compatible)
-		f, err := params.FileHandler.Open()
-		if err != nil {
-			return fmt.Errorf("opening upload file: %w", err)
-		}
-		defer f.Close() //nolint:errcheck
-
-		csvReader := csv.NewReader(params.File)
-		csvReader.LazyQuotes = true // Allow malformed quotes in fields (common in bank exports)
-		csvReader.TrimLeadingSpace = true
-		data, err = csvReader.ReadAll()
-		if err != nil {
-			return fmt.Errorf("reading csv file: %w", err)
-		}
-	}
+	data := params.Data
 
 	budget, err := p.budgetStore.FindBudgetByAccountID(ctx, params.AccountID)
 	if err != nil {
@@ -175,33 +150,12 @@ func (p *Processor) Fetch(ctx context.Context, params ProcessParams) ([]Transact
 	return p.txnStore.FetchTransactionsByAccount(ctx, params.AccountID, params.Status)
 }
 
-// Preview parses CSV and returns preview without saving to database.
+// Preview parses pre-parsed CSV data and returns preview without saving to database.
 func (p *Processor) Preview(ctx context.Context, params ProcessParams) (*PreviewResult, error) {
-	var data [][]string
-	var err error
-
-	// Use pre-parsed data if provided
-	if params.Data != nil {
-		data = params.Data
-	} else {
-		// Parse from file
-		if params.File == nil {
-			return nil, fmt.Errorf("no file or data provided")
-		}
-		f, err := params.FileHandler.Open()
-		if err != nil {
-			return nil, fmt.Errorf("opening upload file: %w", err)
-		}
-		defer f.Close() //nolint:errcheck
-
-		csvReader := csv.NewReader(params.File)
-		csvReader.LazyQuotes = true // Allow malformed quotes in fields (common in bank exports)
-		csvReader.TrimLeadingSpace = true
-		data, err = csvReader.ReadAll()
-		if err != nil {
-			return nil, fmt.Errorf("reading csv file: %w", err)
-		}
+	if params.Data == nil {
+		return nil, fmt.Errorf("no data provided")
 	}
+	data := params.Data
 
 	budget, err := p.budgetStore.FindBudgetByAccountID(ctx, params.AccountID)
 	if err != nil {

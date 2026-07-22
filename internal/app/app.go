@@ -58,6 +58,7 @@ func New(cfg Config) (*App, error) {
 		parser.RevolutBankName:   parser.NewRevolutParser(revolutConfig(), sha256.New(), timeProvider),
 		parser.PKOBankName:       parser.NewPKOParser(pkoConfig(), sha256.New(), timeProvider),
 		parser.MilleniumBankName: parser.NewMilleniumParser(milleniumConfig(), sha256.New(), timeProvider),
+		parser.INGBankName:       parser.NewINGParser(ingConfig(), sha256.New(), timeProvider),
 	}
 
 	// Wire smart suggestions
@@ -162,5 +163,21 @@ func milleniumConfig() parser.Config {
 			HasHeader: true,
 		},
 		HashColumns: []int{0, 1, 3, 4, 5, 6, 7, 8, 10},
+	}
+}
+
+func ingConfig() parser.Config {
+	return parser.Config{
+		TransactionDateIndex: 0,
+		DescriptionIndex:     3,
+		AmountIndex:          8,
+		CurrencyIndex:        9,
+		DateFormat:           "2006-01-02",
+		BankName:             parser.INGBankName,
+		ColumnsAmount:        21,
+		Header: parser.HeaderCfg{
+			HasHeader: false,
+		},
+		HashColumns: []int{0, 2, 3, 7, 8, 9},
 	}
 }

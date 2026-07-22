@@ -29,6 +29,22 @@ const (
 	errorTmpl = "error"
 )
 
+// detectCSVComma inspects the first 500 bytes of a CSV file to determine its
+// delimiter. Bank exports are either comma- or semicolon-delimited; ING uses
+// semicolons throughout, so a simple character count over a small sample is
+// sufficient to distinguish the two.
+func detectCSVComma(data []byte) rune {
+	n := len(data)
+	if n > 500 {
+		n = 500
+	}
+	sample := data[:n]
+	if bytes.Count(sample, []byte{';'}) > bytes.Count(sample, []byte{','}) {
+		return ';'
+	}
+	return ','
+}
+
 func (s *Server) render(w http.ResponseWriter, status int, page, tmplName string, data any) {
 	ts, ok := s.TemplateCache[page]
 	if !ok {
@@ -976,7 +992,7 @@ func (s *Server) uploadBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, handler, err := r.FormFile("txn-file")
+	file, _, err := r.FormFile("txn-file")
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
 		return
@@ -991,11 +1007,27 @@ func (s *Server) uploadBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, fmt.Sprintf("reading file: %v", err))
+		return
+	}
+
+	csvReader := csv.NewReader(bytes.NewReader(fileBytes))
+	csvReader.LazyQuotes = true // Allow malformed quotes in fields (common in bank exports)
+	csvReader.TrimLeadingSpace = true
+	csvReader.Comma = detectCSVComma(fileBytes)
+	csvReader.FieldsPerRecord = -1 // ING preamble rows have variable widths
+	csvData, err := csvReader.ReadAll()
+	if err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, fmt.Sprintf("parsing CSV: %v", err))
+		return
+	}
+
 	params := txn.ProcessParams{
-		File:        file,
-		FileHandler: handler,
-		BudgetID:    budgetID,
-		AccountID:   accID,
+		Data:      csvData,
+		BudgetID:  budgetID,
+		AccountID: accID,
 	}
 
 	if err := s.TxnProcessor.Process(r.Context(), params); err != nil {
@@ -1079,6 +1111,8 @@ func (s *Server) previewBankTxnsHandler(w http.ResponseWriter, r *http.Request) 
 	csvReader := csv.NewReader(bytes.NewReader(fileBytes))
 	csvReader.LazyQuotes = true // Allow malformed quotes in fields (common in bank exports)
 	csvReader.TrimLeadingSpace = true
+	csvReader.Comma = detectCSVComma(fileBytes)
+	csvReader.FieldsPerRecord = -1 // ING preamble rows have variable widths
 	data, err := csvReader.ReadAll()
 	if err != nil {
 		_ = s.FileStore.DeleteUpload(fileUUID) // Clean up temp file
@@ -1142,6 +1176,8 @@ func (s *Server) confirmBankTxnsHandler(w http.ResponseWriter, r *http.Request) 
 	csvReader := csv.NewReader(bytes.NewReader(fileBytes))
 	csvReader.LazyQuotes = true // Allow malformed quotes in fields (common in bank exports)
 	csvReader.TrimLeadingSpace = true
+	csvReader.Comma = detectCSVComma(fileBytes)
+	csvReader.FieldsPerRecord = -1 // ING preamble rows have variable widths
 	data, err := csvReader.ReadAll()
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, fmt.Sprintf("parsing CSV: %v", err))

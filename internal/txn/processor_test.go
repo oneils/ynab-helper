@@ -96,6 +96,42 @@ func (m *mockYnabClient) Upload(req ynab.TxnReq) error {
 	return nil
 }
 
+type mockBudgetFinder struct {
+	findFunc func(ctx context.Context, accID string) (ynab.Budget, error)
+	budget   ynab.Budget
+}
+
+func (m *mockBudgetFinder) FindBudgetByAccountID(ctx context.Context, accID string) (ynab.Budget, error) {
+	if m.findFunc != nil {
+		return m.findFunc(ctx, accID)
+	}
+	return m.budget, nil
+}
+
+type mockParserMappingLookup struct {
+	getFunc    func(ctx context.Context, accountID string) (string, error)
+	parserName string
+	err        error
+}
+
+func (m *mockParserMappingLookup) GetParserMapping(ctx context.Context, accountID string) (string, error) {
+	if m.getFunc != nil {
+		return m.getFunc(ctx, accountID)
+	}
+	return m.parserName, m.err
+}
+
+type mockReportParser struct {
+	parseFunc func(acc BankAccount, data [][]string) []Transaction
+}
+
+func (m *mockReportParser) Parse(acc BankAccount, data [][]string) []Transaction {
+	if m.parseFunc != nil {
+		return m.parseFunc(acc, data)
+	}
+	return nil
+}
+
 // Tests
 
 func TestProcessor_Fetch(t *testing.T) {
@@ -109,7 +145,7 @@ func TestProcessor_Fetch(t *testing.T) {
 		},
 	}
 
-	processor := NewProcessor(nil, store, nil, nil, nil)
+	processor := NewProcessor(nil, store, nil, nil, nil, nil)
 
 	t.Run("Fetch by account ID", func(t *testing.T) {
 		params := ProcessParams{AccountID: "acc1", Status: ""}
@@ -148,7 +184,7 @@ func TestProcessor_FetchByID(t *testing.T) {
 		},
 	}
 
-	processor := NewProcessor(nil, store, nil, nil, nil)
+	processor := NewProcessor(nil, store, nil, nil, nil, nil)
 
 	t.Run("Fetch existing transaction", func(t *testing.T) {
 		txn, err := processor.FetchByID(ctx, "txn-123")
@@ -182,7 +218,7 @@ func TestProcessor_Skip(t *testing.T) {
 		},
 	}
 
-	processor := NewProcessor(nil, store, nil, nil, nil)
+	processor := NewProcessor(nil, store, nil, nil, nil, nil)
 
 	err := processor.Skip(ctx, "txn-123")
 
@@ -207,7 +243,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 
 		client := &mockYnabClient{}
 
-		processor := NewProcessor(nil, store, nil, client, nil)
+		processor := NewProcessor(nil, store, nil, client, nil, nil)
 
 		form := SaveForm{
 			TxnID:      "txn-123",
@@ -250,7 +286,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 	})
 
 	t.Run("Invalid date format", func(t *testing.T) {
-		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil)
+		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil, nil)
 
 		form := SaveForm{
 			TxnID:   "txn-123",
@@ -266,7 +302,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 	})
 
 	t.Run("Invalid amount format", func(t *testing.T) {
-		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil)
+		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil, nil)
 
 		form := SaveForm{
 			TxnID:   "txn-123",
@@ -289,7 +325,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 			},
 		}
 
-		processor := NewProcessor(nil, store, nil, client, nil)
+		processor := NewProcessor(nil, store, nil, client, nil, nil)
 
 		form := SaveForm{
 			TxnID:   "txn-123",
@@ -306,7 +342,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 }
 
 func TestProcessor_SuggestPayee(t *testing.T) {
-	processor := NewProcessor(nil, nil, nil, nil, nil)
+	processor := NewProcessor(nil, nil, nil, nil, nil, nil)
 
 	payees := []ynab.Payee{
 		{ID: "p1", Name: "BIEDRONKA"},
@@ -419,7 +455,7 @@ func TestProcessor_Normalize(t *testing.T) {
 }
 
 func TestProcessor_ParseYnabTime(t *testing.T) {
-	processor := NewProcessor(nil, nil, nil, nil, nil)
+	processor := NewProcessor(nil, nil, nil, nil, nil, nil)
 
 	tests := []struct {
 		name      string
@@ -471,4 +507,135 @@ func TestProcessor_ParseYnabTime(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProcessor_ParserNames(t *testing.T) {
+	parsers := map[string]ReportParser{
+		"Santander": nil,
+		"Revolut":   nil,
+	}
+	processor := NewProcessor(parsers, nil, nil, nil, nil, nil)
+
+	names := processor.ParserNames()
+	if len(names) != 2 {
+		t.Fatalf("expected 2 names, got %d", len(names))
+	}
+	found := map[string]bool{}
+	for _, n := range names {
+		found[n] = true
+	}
+	if !found["Santander"] || !found["Revolut"] {
+		t.Errorf("expected Santander and Revolut, got %v", names)
+	}
+}
+
+func TestProcessor_Process_ParserMapping(t *testing.T) {
+	ctx := context.Background()
+
+	budgetStore := &mockBudgetFinder{
+		budget: ynab.Budget{
+			Accounts: []ynab.Account{
+				{ID: "acc1", Name: "My Checking"},
+			},
+		},
+	}
+
+	t.Run("errors when no mapping found", func(t *testing.T) {
+		store := &mockTransactionStore{}
+		mapping := &mockParserMappingLookup{parserName: ""}
+		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping)
+
+		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+
+		if err == nil {
+			t.Fatal("Expected error when no mapping found")
+		}
+	})
+
+	t.Run("errors when mapped parser is not registered", func(t *testing.T) {
+		store := &mockTransactionStore{}
+		mapping := &mockParserMappingLookup{parserName: "Unknown"}
+		processor := NewProcessor(map[string]ReportParser{}, store, budgetStore, nil, nil, mapping)
+
+		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+
+		if err == nil {
+			t.Fatal("Expected error when mapped parser is not registered")
+		}
+	})
+
+	t.Run("succeeds when mapping exists and parser is registered", func(t *testing.T) {
+		store := &mockTransactionStore{}
+		mapping := &mockParserMappingLookup{parserName: "Santander"}
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{{ID: "t1", Account: acc}}
+			},
+		}
+		parsers := map[string]ReportParser{"Santander": parser}
+		processor := NewProcessor(parsers, store, budgetStore, nil, nil, mapping)
+
+		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(store.transactions) != 1 {
+			t.Fatalf("Expected 1 transaction saved, got %d", len(store.transactions))
+		}
+	})
+
+	t.Run("propagates mapping lookup errors", func(t *testing.T) {
+		store := &mockTransactionStore{}
+		mapping := &mockParserMappingLookup{err: errors.New("db error")}
+		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping)
+
+		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+
+		if err == nil {
+			t.Fatal("Expected error to be propagated")
+		}
+	})
+}
+
+func TestProcessor_Preview_ParserMapping(t *testing.T) {
+	ctx := context.Background()
+
+	budgetStore := &mockBudgetFinder{
+		budget: ynab.Budget{
+			Accounts: []ynab.Account{
+				{ID: "acc1", Name: "My Checking"},
+			},
+		},
+	}
+
+	t.Run("returns validation error (no Go error) when no mapping found", func(t *testing.T) {
+		store := &mockTransactionStore{}
+		mapping := &mockParserMappingLookup{parserName: ""}
+		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping)
+
+		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+
+		if err != nil {
+			t.Fatalf("Expected nil Go error, got: %v", err)
+		}
+		if len(result.ValidationErrors) == 0 {
+			t.Fatal("Expected a validation error")
+		}
+	})
+
+	t.Run("returns validation error (no Go error) when parser is unknown", func(t *testing.T) {
+		store := &mockTransactionStore{}
+		mapping := &mockParserMappingLookup{parserName: "Unknown"}
+		processor := NewProcessor(map[string]ReportParser{}, store, budgetStore, nil, nil, mapping)
+
+		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+
+		if err != nil {
+			t.Fatalf("Expected nil Go error, got: %v", err)
+		}
+		if len(result.ValidationErrors) == 0 {
+			t.Fatal("Expected a validation error")
+		}
+	})
 }

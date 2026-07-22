@@ -1,0 +1,44 @@
+{{define "parser-mappings-section"}}
+
+<div class="page-header">
+    <h2>Parser Mappings</h2>
+    <p class="page-description">Map each YNAB account to the bank statement parser used when uploading CSVs</p>
+</div>
+
+<div class="form-group settings-budget-selector">
+    <label for="parser-mapping-budget">Budget</label>
+    <select id="parser-mapping-budget" name="budget" hx-get="/settings/parser-mappings" hx-target="#parser-mapping-rows" hx-trigger="change">
+        <option value="">Select budget…</option>
+        {{range .Budgets}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+</div>
+
+<table class="settings-card">
+    <thead>
+        <tr>
+            <th>Account</th>
+            <th>Parser</th>
+        </tr>
+    </thead>
+    <tbody id="parser-mapping-rows">
+    </tbody>
+</table>
+
+{{end}}
+
+{{define "parser-mapping-rows"}}
+{{range .}}
+<tr>
+    <td>{{.Account.Name}}</td>
+    <td>
+        <select name="parser_name" hx-post="/settings/parser-mappings/{{.Account.ID}}" hx-trigger="change" hx-swap="none">
+            <option value="" {{if eq .ParserName ""}}selected{{end}}>— not set —</option>
+            <option value="Santander" {{if eq .ParserName "Santander"}}selected{{end}}>Santander</option>
+            <option value="Revolut" {{if eq .ParserName "Revolut"}}selected{{end}}>Revolut</option>
+            <option value="PKO" {{if eq .ParserName "PKO"}}selected{{end}}>PKO</option>
+            <option value="Millennium" {{if eq .ParserName "Millennium"}}selected{{end}}>Millennium</option>
+        </select>
+    </td>
+</tr>
+{{end}}
+{{end}}

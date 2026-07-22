@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -810,6 +811,52 @@ func (s *Server) settingsViewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", baseTmpl, data)
+}
+
+// ParserMappingRow is a view-model for a parser mapping table row.
+type ParserMappingRow struct {
+	Account    ynab.Account
+	ParserName string
+}
+
+func (s *Server) parserMappingsHandler(w http.ResponseWriter, r *http.Request) {
+	budgetID := r.URL.Query().Get("budget")
+
+	budget, err := s.Syncer.FindBudgetByID(r.Context(), budgetID)
+	if err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		return
+	}
+
+	rows := make([]ParserMappingRow, 0, len(budget.Accounts))
+	for _, acc := range budget.Accounts {
+		parserName, err := s.DB.ParserMappingStore().GetParserMapping(r.Context(), acc.ID)
+		if err != nil {
+			s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+			return
+		}
+		rows = append(rows, ParserMappingRow{Account: acc, ParserName: parserName})
+	}
+
+	s.render(w, http.StatusOK, "ynab-settings.tmpl.html", "parser-mapping-rows", rows)
+}
+
+func (s *Server) saveParserMappingHandler(w http.ResponseWriter, r *http.Request) {
+	accountID := chi.URLParam(r, "accountID")
+	parserName := r.FormValue("parser_name")
+
+	if parserName != "" && !slices.Contains(s.TxnProcessor.ParserNames(), parserName) {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, fmt.Sprintf("unknown parser %q", parserName))
+		return
+	}
+
+	if err := s.DB.ParserMappingStore().SaveParserMapping(r.Context(), accountID, parserName); err != nil {
+		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
+		return
+	}
+
+	w.Header().Set("HX-Trigger", `{"showToast": {"message": "Parser mapping saved", "type": "success"}}`)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) syncBudgetsHandler(w http.ResponseWriter, r *http.Request) {

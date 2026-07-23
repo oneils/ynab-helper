@@ -51,6 +51,7 @@ type SuggestionEngine struct {
 // PatternStorer defines pattern lookup operations.
 type PatternStorer interface {
 	FindPatternsByDescription(ctx context.Context, budgetID, normalizedDesc string, limit int) ([]PayeePattern, error)
+	FindPatternsByPayeeID(ctx context.Context, budgetID, payeeID string, limit int) ([]PayeePattern, error)
 	UpsertPattern(ctx context.Context, p PayeePattern) error
 }
 
@@ -130,19 +131,10 @@ func (e *SuggestionEngine) GetCategorySuggestions(ctx context.Context,
 
 	// Strategy 1: Payee-based suggestions (most accurate)
 	if payeeID != "" {
-		patterns, err = e.patternStore.FindPatternsByDescription(ctx, budgetID, "", 50)
+		patterns, err = e.patternStore.FindPatternsByPayeeID(ctx, budgetID, payeeID, 50)
 		if err != nil {
 			return nil, err
 		}
-
-		// Filter to only patterns matching the payee
-		var payeePatterns []PayeePattern
-		for _, p := range patterns {
-			if p.PayeeID == payeeID && p.CategoryID != "" {
-				payeePatterns = append(payeePatterns, p)
-			}
-		}
-		patterns = payeePatterns
 	}
 
 	// Strategy 2: Description-based suggestions (fallback or supplement)

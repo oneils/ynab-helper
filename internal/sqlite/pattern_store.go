@@ -142,6 +142,65 @@ func (s *PatternStore) FindPatternsByDescription(ctx context.Context,
 	return patterns, rows.Err()
 }
 
+// FindPatternsByPayeeID searches for matching patterns by exact payee ID.
+func (s *PatternStore) FindPatternsByPayeeID(ctx context.Context,
+	budgetID, payeeID string, limit int) (patterns []txn.PayeePattern, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT id, budget_id, normalized_description,
+		       payee_id, payee_name, category_id, category_name,
+		       occurrence_count, last_seen, created_at, updated_at
+		FROM payee_patterns
+		WHERE budget_id = ? AND payee_id = ?
+		  AND category_id IS NOT NULL AND category_id != ''
+		ORDER BY occurrence_count DESC, last_seen DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, budgetID, payeeID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query patterns: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close rows: %w", closeErr)
+		}
+	}()
+
+	for rows.Next() {
+		var p txn.PayeePattern
+		var lastSeen, createdAt, updatedAt string
+		var categoryID, categoryName sql.NullString
+
+		err := rows.Scan(
+			&p.ID, &p.BudgetID, &p.NormalizedDescription,
+			&p.PayeeID, &p.PayeeName, &categoryID, &categoryName,
+			&p.OccurrenceCount, &lastSeen, &createdAt, &updatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan pattern: %w", err)
+		}
+
+		if categoryID.Valid {
+			p.CategoryID = categoryID.String
+		}
+		if categoryName.Valid {
+			p.CategoryName = categoryName.String
+		}
+
+		p.LastSeen, _ = time.Parse(time.RFC3339, lastSeen)
+		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+
+		patterns = append(patterns, p)
+	}
+
+	return patterns, rows.Err()
+}
+
 // ClearPatterns removes all patterns for a budget (useful for re-sync).
 func (s *PatternStore) ClearPatterns(ctx context.Context, budgetID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

@@ -654,112 +654,108 @@ func (s *YnabStore) insertCategory(ctx context.Context, tx *sql.Tx, budgetID, gr
 
 // FetchCategoriesByBudget returns category groups for a specific budget.
 func (s *YnabStore) FetchCategoriesByBudget(ctx context.Context, budgetID string) ([]ynab.CategoryGroup, error) {
-	// Fetch category groups
-	groupQuery := `
-		SELECT id, budget_id, name, hidden, deleted
-		FROM category_groups
-		WHERE budget_id = ? AND deleted = 0
-	`
-
-	rows, err := s.db.QueryContext(ctx, groupQuery, budgetID)
-	if err != nil {
-		return nil, fmt.Errorf("query category groups: %w", err)
-	}
-	defer rows.Close() //nolint:errcheck
-
-	var groups []ynab.CategoryGroup
-	for rows.Next() {
-		var group ynab.CategoryGroup
-		var hidden, deleted int
-
-		err := rows.Scan(
-			&group.ID,
-			&group.BudgetID,
-			&group.Name,
-			&hidden,
-			&deleted,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("scan category group: %w", err)
-		}
-
-		group.Hidden = intToBool(hidden)
-		group.Deleted = intToBool(deleted)
-
-		// Fetch categories for this group
-		categories, err := s.fetchCategoriesByGroup(ctx, group.ID)
-		if err != nil {
-			return nil, fmt.Errorf("fetch categories: %w", err)
-		}
-		group.Categories = categories
-
-		groups = append(groups, group)
-	}
-
-	return groups, rows.Err()
-}
-
-// fetchCategoriesByGroup fetches all categories for a category group.
-func (s *YnabStore) fetchCategoriesByGroup(ctx context.Context, groupID string) ([]ynab.Category, error) {
 	query := `
-		SELECT id, category_group_id, category_group_name, name,
-		       hidden, deleted, original_category_group_id, note,
-		       budgeted, activity, balance, goal_type, goal_days,
-		       goal_cadence, goal_cadence_frequency, goal_target,
-		       goal_target_month, goal_creation_month, goal_percentage_complete,
-		       goal_months_to_budget, goal_under_funded, goal_overall_funded,
-		       goal_overall_left
-		FROM categories
-		WHERE category_group_id = ?
+		SELECT cg.id, cg.budget_id, cg.name, cg.hidden, cg.deleted,
+		       c.id, c.category_group_id, c.category_group_name, c.name,
+		       c.hidden, c.deleted, c.original_category_group_id, c.note,
+		       c.budgeted, c.activity, c.balance, c.goal_type, c.goal_days,
+		       c.goal_cadence, c.goal_cadence_frequency, c.goal_target,
+		       c.goal_target_month, c.goal_creation_month, c.goal_percentage_complete,
+		       c.goal_months_to_budget, c.goal_under_funded, c.goal_overall_funded,
+		       c.goal_overall_left
+		FROM category_groups cg
+		LEFT JOIN categories c ON c.category_group_id = cg.id AND c.deleted = 0
+		WHERE cg.budget_id = ? AND cg.deleted = 0
+		ORDER BY cg.id
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, groupID)
+	rows, err := s.db.QueryContext(ctx, query, budgetID)
 	if err != nil {
-		return nil, fmt.Errorf("query categories: %w", err)
+		return nil, fmt.Errorf("query categories by budget: %w", err)
 	}
 	defer rows.Close() //nolint:errcheck
 
-	var categories []ynab.Category
+	groupMap := make(map[string]*ynab.CategoryGroup)
+	var groupOrder []string
+
 	for rows.Next() {
-		var cat ynab.Category
-		var hidden, deleted int
+		var cgID, cgBudgetID, cgName string
+		var cgHidden, cgDeleted int
+
+		var catID, catGroupID, catGroupName, catName sql.NullString
+		var catHidden, catDeleted sql.NullInt64
+		var catOriginalCategoryGroupID, catNote sql.NullString
+		var catBudgeted, catActivity, catBalance sql.NullInt64
+		var catGoalType sql.NullString
+		var catGoalDays, catGoalCadence, catGoalCadenceFrequency, catGoalTarget sql.NullInt64
+		var catGoalTargetMonth, catGoalCreationMonth sql.NullString
+		var catGoalPercentageComplete, catGoalMonthsToBudget, catGoalUnderFunded, catGoalOverallFunded, catGoalOverallLeft sql.NullInt64
 
 		err := rows.Scan(
-			&cat.ID,
-			&cat.CategoryGroupID,
-			&cat.CategoryGroupName,
-			&cat.Name,
-			&hidden,
-			&deleted,
-			&cat.OriginalCategoryGroupId,
-			&cat.Note,
-			&cat.Budgeted,
-			&cat.Activity,
-			&cat.Balance,
-			&cat.GoalType,
-			&cat.GoalDays,
-			&cat.GoalCadence,
-			&cat.GoalCadenceFrequency,
-			&cat.GoalTarget,
-			&cat.GoalTargetMonth,
-			&cat.GoalCreationMonth,
-			&cat.GoalPercentageComplete,
-			&cat.GoalMonthsToBudget,
-			&cat.GoalUnderFunded,
-			&cat.GoalOverallFunded,
-			&cat.GoalOverallLeft,
+			&cgID, &cgBudgetID, &cgName, &cgHidden, &cgDeleted,
+			&catID, &catGroupID, &catGroupName, &catName,
+			&catHidden, &catDeleted, &catOriginalCategoryGroupID, &catNote,
+			&catBudgeted, &catActivity, &catBalance, &catGoalType, &catGoalDays,
+			&catGoalCadence, &catGoalCadenceFrequency, &catGoalTarget,
+			&catGoalTargetMonth, &catGoalCreationMonth, &catGoalPercentageComplete,
+			&catGoalMonthsToBudget, &catGoalUnderFunded, &catGoalOverallFunded,
+			&catGoalOverallLeft,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("scan category: %w", err)
+			return nil, fmt.Errorf("scan category group row: %w", err)
 		}
 
-		cat.Hidden = intToBool(hidden)
-		cat.Deleted = intToBool(deleted)
+		if _, seen := groupMap[cgID]; !seen {
+			groupMap[cgID] = &ynab.CategoryGroup{
+				ID:       cgID,
+				BudgetID: cgBudgetID,
+				Name:     cgName,
+				Hidden:   intToBool(cgHidden),
+				Deleted:  intToBool(cgDeleted),
+			}
+			groupOrder = append(groupOrder, cgID)
+		}
 
-		categories = append(categories, cat)
+		if catID.Valid {
+			cat := ynab.Category{
+				ID:                      catID.String,
+				CategoryGroupID:         catGroupID.String,
+				CategoryGroupName:       catGroupName.String,
+				Name:                    catName.String,
+				Hidden:                  intToBool(int(catHidden.Int64)),
+				Deleted:                 intToBool(int(catDeleted.Int64)),
+				OriginalCategoryGroupId: catOriginalCategoryGroupID.String,
+				Note:                    catNote.String,
+				Budgeted:                int(catBudgeted.Int64),
+				Activity:                int(catActivity.Int64),
+				Balance:                 int(catBalance.Int64),
+				GoalType:                catGoalType.String,
+				GoalDays:                int(catGoalDays.Int64),
+				GoalCadence:             int(catGoalCadence.Int64),
+				GoalCadenceFrequency:    int(catGoalCadenceFrequency.Int64),
+				GoalTarget:              int(catGoalTarget.Int64),
+				GoalTargetMonth:         catGoalTargetMonth.String,
+				GoalCreationMonth:       catGoalCreationMonth.String,
+				GoalPercentageComplete:  int(catGoalPercentageComplete.Int64),
+				GoalMonthsToBudget:      int(catGoalMonthsToBudget.Int64),
+				GoalUnderFunded:         int(catGoalUnderFunded.Int64),
+				GoalOverallFunded:       int(catGoalOverallFunded.Int64),
+				GoalOverallLeft:         int(catGoalOverallLeft.Int64),
+			}
+			groupMap[cgID].Categories = append(groupMap[cgID].Categories, cat)
+		}
 	}
 
-	return categories, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]ynab.CategoryGroup, 0, len(groupOrder))
+	for _, id := range groupOrder {
+		result = append(result, *groupMap[id])
+	}
+
+	return result, nil
 }
 
 // --- Payee operations ---

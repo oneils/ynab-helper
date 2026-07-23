@@ -145,7 +145,16 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 			Status:    activeStatus,
 		})
 		if err == nil {
-			rows := enrichTransactionList(r.Context(), txns,
+			pm := newPageMeta(page, limit, len(txns))
+			start := (pm.Page - 1) * pm.Limit
+			end := start + pm.Limit
+			if start > len(txns) {
+				start = len(txns)
+			}
+			if end > len(txns) {
+				end = len(txns)
+			}
+			rows := enrichTransactionList(r.Context(), txns[start:end],
 				s.Syncer.FindBudgetByAccID,
 				func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
 					return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
@@ -156,16 +165,7 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 				s.Syncer.FetchPayeesByBudget,
 				s.TxnProcessor.SuggestPayee,
 			)
-			pm := newPageMeta(page, limit, len(rows))
-			start := (pm.Page - 1) * pm.Limit
-			end := start + pm.Limit
-			if start > len(rows) {
-				start = len(rows)
-			}
-			if end > len(rows) {
-				end = len(rows)
-			}
-			data.Txns = rows[start:end]
+			data.Txns = rows
 			data.PageMeta = pm
 		}
 
@@ -316,7 +316,16 @@ func (s *Server) bankTxnRowsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows := enrichTransactionList(r.Context(), txns,
+	pm := newPageMeta(page, limit, len(txns))
+	start := (pm.Page - 1) * pm.Limit
+	end := start + pm.Limit
+	if start > len(txns) {
+		start = len(txns)
+	}
+	if end > len(txns) {
+		end = len(txns)
+	}
+	rows := enrichTransactionList(r.Context(), txns[start:end],
 		s.Syncer.FindBudgetByAccID,
 		func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
 			return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
@@ -328,16 +337,6 @@ func (s *Server) bankTxnRowsHandler(w http.ResponseWriter, r *http.Request) {
 		s.TxnProcessor.SuggestPayee,
 	)
 
-	pm := newPageMeta(page, limit, len(rows))
-	start := (pm.Page - 1) * pm.Limit
-	end := start + pm.Limit
-	if start > len(rows) {
-		start = len(rows)
-	}
-	if end > len(rows) {
-		end = len(rows)
-	}
-
 	data := struct {
 		Txns         []TxnListRow
 		PageMeta     PageMeta
@@ -346,7 +345,7 @@ func (s *Server) bankTxnRowsHandler(w http.ResponseWriter, r *http.Request) {
 		ActiveStatus string
 		StatusCounts map[string]int
 	}{
-		Txns:         rows[start:end],
+		Txns:         rows,
 		PageMeta:     pm,
 		Budget:       budgetID,
 		Account:      accountID,
@@ -372,7 +371,16 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows := enrichTransactionList(r.Context(), txns,
+	pm := newPageMeta(page, limit, len(txns))
+	start := (pm.Page - 1) * pm.Limit
+	end := start + pm.Limit
+	if start > len(txns) {
+		start = len(txns)
+	}
+	if end > len(txns) {
+		end = len(txns)
+	}
+	rows := enrichTransactionList(r.Context(), txns[start:end],
 		s.Syncer.FindBudgetByAccID,
 		func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
 			return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
@@ -383,17 +391,6 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		s.Syncer.FetchPayeesByBudget,
 		s.TxnProcessor.SuggestPayee,
 	)
-
-	pm := newPageMeta(page, limit, len(rows))
-	start := (pm.Page - 1) * pm.Limit
-	end := start + pm.Limit
-	if start > len(rows) {
-		start = len(rows)
-	}
-	if end > len(rows) {
-		end = len(rows)
-	}
-	rows = rows[start:end]
 
 	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), accountID)
 	if err != nil {

@@ -142,9 +142,6 @@ func (s *YnabStore) insertAccount(ctx context.Context, tx *sql.Tx, budgetID stri
 
 // FetchAllBudgets returns all budgets from the database.
 func (s *YnabStore) FetchAllBudgets(ctx context.Context) ([]ynab.Budget, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-
 	// First, fetch all budgets
 	query := `
 		SELECT id, name, last_modified_on, first_month, last_month,
@@ -197,9 +194,6 @@ func (s *YnabStore) FetchAllBudgets(ctx context.Context) ([]ynab.Budget, error) 
 
 // FindBudgetByID finds a budget by its ID.
 func (s *YnabStore) FindBudgetByID(ctx context.Context, id string) (ynab.Budget, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	query := `
 		SELECT id, name, last_modified_on, first_month, last_month,
 		       date_format, currency_format
@@ -228,9 +222,6 @@ func (s *YnabStore) FindBudgetByID(ctx context.Context, id string) (ynab.Budget,
 
 // FindBudgetByAccountID finds a budget by account ID.
 func (s *YnabStore) FindBudgetByAccountID(ctx context.Context, accID string) (ynab.Budget, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	query := `
 		SELECT b.id, b.name, b.last_modified_on, b.first_month, b.last_month,
 		       b.date_format, b.currency_format
@@ -491,9 +482,6 @@ func (s *YnabStore) UpsertAccount(ctx context.Context, acc ynab.Account) error {
 
 // FetchAllAccounts returns all accounts from the database.
 func (s *YnabStore) FetchAllAccounts(ctx context.Context) ([]ynab.Account, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	query := `
 		SELECT id, name, type, on_budget, closed, note,
 		       balance, cleared_balance, uncleared_balance,
@@ -666,9 +654,6 @@ func (s *YnabStore) insertCategory(ctx context.Context, tx *sql.Tx, budgetID, gr
 
 // FetchCategoriesByBudget returns category groups for a specific budget.
 func (s *YnabStore) FetchCategoriesByBudget(ctx context.Context, budgetID string) ([]ynab.CategoryGroup, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	// Fetch category groups
 	groupQuery := `
 		SELECT id, budget_id, name, hidden, deleted
@@ -820,9 +805,6 @@ func (s *YnabStore) UpsertPayee(ctx context.Context, payee ynab.Payee) error {
 
 // FetchPayeesByBudget returns payees for a specific budget.
 func (s *YnabStore) FetchPayeesByBudget(ctx context.Context, budgetID string) ([]ynab.Payee, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	query := `
 		SELECT id, budget_id, name, transfer_account_id, deleted, last_category_id
 		FROM payees
@@ -962,9 +944,6 @@ func (s *YnabStore) UpsertSyncHistory(ctx context.Context, h ynab.SyncHistory) e
 
 // FetchAllSyncHistory returns all sync history records from the database.
 func (s *YnabStore) FetchAllSyncHistory(ctx context.Context) ([]ynab.SyncHistory, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	query := `
 		SELECT id, name, budget_id, status, updated_at,
 		       last_known_version, added_items, message
@@ -992,9 +971,6 @@ func (s *YnabStore) FetchAllSyncHistory(ctx context.Context) ([]ynab.SyncHistory
 
 // FindSyncHistoryByBudget returns sync history for a specific budget.
 func (s *YnabStore) FindSyncHistoryByBudget(ctx context.Context, budgetID string) ([]ynab.SyncHistory, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	query := `
 		SELECT id, name, budget_id, status, updated_at,
 		       last_known_version, added_items, message

@@ -746,6 +746,32 @@ func TestParsePagination_InvalidLimitString(t *testing.T) {
 	}
 }
 
+func TestParseSortOrder_DefaultsToDesc(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns", nil)
+	if got := parseSortOrder(req); got != "desc" {
+		t.Errorf("expected default sort 'desc', got %q", got)
+	}
+}
+
+func TestParseSortOrder_ExplicitAsc(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?sort=asc", nil)
+	if got := parseSortOrder(req); got != "asc" {
+		t.Errorf("expected sort 'asc', got %q", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/bank-txns?sort=ASC", nil)
+	if got := parseSortOrder(req); got != "asc" {
+		t.Errorf("expected case-insensitive sort 'asc', got %q", got)
+	}
+}
+
+func TestParseSortOrder_InvalidValueDefaultsToDesc(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns?sort=garbage", nil)
+	if got := parseSortOrder(req); got != "desc" {
+		t.Errorf("expected invalid sort value to default to 'desc', got %q", got)
+	}
+}
+
 func TestNewPageMeta_SinglePage(t *testing.T) {
 	pm := newPageMeta(1, 50, 30)
 	if pm.TotalPages != 1 {

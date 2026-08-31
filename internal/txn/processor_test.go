@@ -12,7 +12,7 @@ import (
 
 type mockTransactionStore struct {
 	insertFunc         func(ctx context.Context, t Transaction) error
-	fetchByAccountFunc func(ctx context.Context, accID string, status string) ([]Transaction, error)
+	fetchByAccountFunc func(ctx context.Context, accID, status, sortOrder string) ([]Transaction, error)
 	findByIDFunc       func(ctx context.Context, id string) (Transaction, error)
 	updateStatusFunc   func(ctx context.Context, id string, status TransactionStatus) error
 	countByStatusFunc  func(ctx context.Context, accountID string) (map[TransactionStatus]int, error)
@@ -28,9 +28,9 @@ func (m *mockTransactionStore) InsertTransaction(ctx context.Context, t Transact
 	return nil
 }
 
-func (m *mockTransactionStore) FetchTransactionsByAccount(ctx context.Context, accID string, status string) ([]Transaction, error) {
+func (m *mockTransactionStore) FetchTransactionsByAccount(ctx context.Context, accID, status, sortOrder string) ([]Transaction, error) {
 	if m.fetchByAccountFunc != nil {
-		return m.fetchByAccountFunc(ctx, accID, status)
+		return m.fetchByAccountFunc(ctx, accID, status, sortOrder)
 	}
 	var result []Transaction
 	for _, t := range m.transactions {
@@ -173,6 +173,28 @@ func TestProcessor_Fetch(t *testing.T) {
 			t.Errorf("Expected transaction ID '1', got '%s'", txns[0].ID)
 		}
 	})
+}
+
+func TestProcessorFetch_PassesSortToStore(t *testing.T) {
+	ctx := context.Background()
+
+	var gotSort string
+	store := &mockTransactionStore{
+		fetchByAccountFunc: func(ctx context.Context, accID, status, sortOrder string) ([]Transaction, error) {
+			gotSort = sortOrder
+			return nil, nil
+		},
+	}
+
+	processor := NewProcessor(nil, store, nil, nil, nil, nil)
+
+	_, err := processor.Fetch(ctx, ProcessParams{AccountID: "acc1", Sort: "asc"})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if gotSort != "asc" {
+		t.Errorf("Expected sort 'asc' to be passed to store, got %q", gotSort)
+	}
 }
 
 func TestProcessor_FetchByID(t *testing.T) {

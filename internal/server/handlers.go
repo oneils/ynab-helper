@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -101,6 +102,7 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 	activeStatus := r.URL.Query().Get("status")
 	budgetID := r.URL.Query().Get("budget")
 	accountID := r.URL.Query().Get("account")
+	sort := parseSortOrder(r)
 
 	page, limit := parsePagination(r)
 
@@ -114,11 +116,13 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		Account        string
 		ActiveStatus   string
 		StatusCounts   map[string]int
+		Sort           string
 	}{
 		Budgets:      budgets,
 		ActiveStatus: activeStatus,
 		Budget:       budgetID,
 		Account:      accountID,
+		Sort:         sort,
 	}
 
 	// If only one budget and no explicit selection, auto-select it
@@ -143,6 +147,7 @@ func (s *Server) importBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 			BudgetID:  budgetID,
 			AccountID: accountID,
 			Status:    activeStatus,
+			Sort:      sort,
 		})
 		if err == nil {
 			pm := newPageMeta(page, limit, len(txns))
@@ -253,6 +258,27 @@ type PageMeta struct {
 	TotalPages int
 }
 
+// TxnListData is the shared view-model for every handler that re-renders the
+// bank-transactions list (or its containing page shell / row fragment).
+type TxnListData struct {
+	Txns         []TxnListRow
+	PageMeta     PageMeta
+	Budget       string
+	Account      string
+	ActiveStatus string
+	StatusCounts map[string]int
+	Sort         string
+}
+
+// parseSortOrder reads the sort query/form param, defaulting to "desc"
+// (newest-first) for anything other than an exact case-insensitive "asc".
+func parseSortOrder(r *http.Request) string {
+	if strings.EqualFold(r.FormValue("sort"), "asc") {
+		return "asc"
+	}
+	return "desc"
+}
+
 // parsePagination reads page and limit from the request, applying defaults and clamping.
 func parsePagination(r *http.Request) (page, limit int) {
 	page = 1
@@ -304,12 +330,14 @@ func (s *Server) bankTxnRowsHandler(w http.ResponseWriter, r *http.Request) {
 	budgetID := r.URL.Query().Get("budget")
 	accountID := r.URL.Query().Get("account")
 	status := r.URL.Query().Get("status")
+	sort := parseSortOrder(r)
 	page, limit := parsePagination(r)
 
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  budgetID,
 		AccountID: accountID,
 		Status:    status,
+		Sort:      sort,
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -337,19 +365,13 @@ func (s *Server) bankTxnRowsHandler(w http.ResponseWriter, r *http.Request) {
 		s.TxnProcessor.SuggestPayee,
 	)
 
-	data := struct {
-		Txns         []TxnListRow
-		PageMeta     PageMeta
-		Budget       string
-		Account      string
-		ActiveStatus string
-		StatusCounts map[string]int
-	}{
+	data := TxnListData{
 		Txns:         rows,
 		PageMeta:     pm,
 		Budget:       budgetID,
 		Account:      accountID,
 		ActiveStatus: status,
+		Sort:         sort,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "txn-rows", data)
@@ -359,12 +381,14 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 	budgetID := r.URL.Query().Get("budget")
 	accountID := r.URL.Query().Get("account")
 	status := r.URL.Query().Get("status")
+	sort := parseSortOrder(r)
 	page, limit := parsePagination(r)
 
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  budgetID,
 		AccountID: accountID,
 		Status:    status,
+		Sort:      sort,
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -402,20 +426,14 @@ func (s *Server) bankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		statusCountsStr[string(k)] = v
 	}
 
-	data := struct {
-		Txns         []TxnListRow
-		PageMeta     PageMeta
-		Budget       string
-		Account      string
-		ActiveStatus string
-		StatusCounts map[string]int
-	}{
+	data := TxnListData{
 		Txns:         rows,
 		PageMeta:     pm,
 		Budget:       budgetID,
 		Account:      accountID,
 		ActiveStatus: status,
 		StatusCounts: statusCountsStr,
+		Sort:         sort,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
@@ -615,6 +633,7 @@ func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 	txnID := chi.URLParam(r, "id")
 	accID := r.URL.Query().Get("accId")
 	activeStatus := r.URL.Query().Get("status")
+	sort := parseSortOrder(r)
 
 	if accID == "" {
 		s.render(w, http.StatusBadRequest, "error.tmpl.html", errorTmpl, "account ID is required")
@@ -636,6 +655,7 @@ func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 		BudgetID:  budget.ID,
 		AccountID: accID,
 		Status:    activeStatus,
+		Sort:      sort,
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -664,20 +684,14 @@ func (s *Server) skipBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 		s.TxnProcessor.SuggestPayee,
 	)
 
-	data := struct {
-		Txns         []TxnListRow
-		PageMeta     PageMeta
-		Budget       string
-		Account      string
-		ActiveStatus string
-		StatusCounts map[string]int
-	}{
+	data := TxnListData{
 		Txns:         rows,
 		PageMeta:     PageMeta{},
 		Budget:       budget.ID,
 		Account:      accID,
 		ActiveStatus: activeStatus,
 		StatusCounts: statusCountsStr,
+		Sort:         sort,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
@@ -700,6 +714,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 		TxnID:      r.PostForm.Get("txnID"),
 	}
 	activeStatus := r.URL.Query().Get("status")
+	sort := parseSortOrder(r)
 
 	if err := s.TxnProcessor.SaveToYnab(r.Context(), form); err != nil {
 		slog.Error("error uploading transaction to YNAB", "error", err)
@@ -752,6 +767,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 		BudgetID:  form.BudgetID,
 		AccountID: form.AccountID,
 		Status:    activeStatus,
+		Sort:      sort,
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -768,14 +784,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 		statusCountsStr[string(k)] = v
 	}
 
-	data := struct {
-		Txns         []TxnListRow
-		PageMeta     PageMeta
-		Budget       string
-		Account      string
-		ActiveStatus string
-		StatusCounts map[string]int
-	}{
+	data := TxnListData{
 		Txns: enrichTransactionList(r.Context(), txns,
 			s.Syncer.FindBudgetByAccID,
 			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
@@ -792,6 +801,7 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 		Account:      form.AccountID,
 		ActiveStatus: activeStatus,
 		StatusCounts: statusCountsStr,
+		Sort:         sort,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
@@ -1021,10 +1031,13 @@ func (s *Server) uploadBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sort := parseSortOrder(r)
+
 	params := txn.ProcessParams{
 		Data:      csvData,
 		BudgetID:  budgetID,
 		AccountID: accID,
+		Sort:      sort,
 	}
 
 	if err := s.TxnProcessor.Process(r.Context(), params); err != nil {
@@ -1050,20 +1063,14 @@ func (s *Server) uploadBankTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		statusCountsStr[string(k)] = v
 	}
 
-	data := struct {
-		Txns         []TxnListRow
-		PageMeta     PageMeta
-		Budget       string
-		Account      string
-		ActiveStatus string
-		StatusCounts map[string]int
-	}{
+	data := TxnListData{
 		Txns:         wrapTransactions(txns),
 		PageMeta:     PageMeta{},
 		Budget:       budgetID,
 		Account:      accID,
 		ActiveStatus: activeStatus,
 		StatusCounts: statusCountsStr,
+		Sort:         sort,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)
@@ -1297,10 +1304,13 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	sort := parseSortOrder(r)
+
 	// Fetch updated transaction list for the account
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  form.BudgetID,
 		AccountID: form.AccountID,
+		Sort:      sort,
 	})
 	if err != nil {
 		slog.Error("failed to fetch transactions after save", "error", err)
@@ -1321,14 +1331,7 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 	// Add success message header for toast notification
 	w.Header().Set("HX-Trigger", `{"showToast": {"message": "Transaction saved successfully", "type": "success"}}`)
 
-	responseData := struct {
-		Txns         []TxnListRow
-		PageMeta     PageMeta
-		Budget       string
-		Account      string
-		ActiveStatus string
-		StatusCounts map[string]int
-	}{
+	responseData := TxnListData{
 		Txns: enrichTransactionList(r.Context(), txns,
 			s.Syncer.FindBudgetByAccID,
 			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
@@ -1345,6 +1348,7 @@ func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
 		Account:      form.AccountID,
 		ActiveStatus: r.URL.Query().Get("status"),
 		StatusCounts: statusCountsStr,
+		Sort:         sort,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", responseData)
@@ -1388,10 +1392,13 @@ func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sort := parseSortOrder(r)
+
 	// Fetch all transactions for the account
 	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
 		BudgetID:  budget.ID,
 		AccountID: accID,
+		Sort:      sort,
 	})
 	if err != nil {
 		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
@@ -1409,14 +1416,7 @@ func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Re-render transaction list
-	data := struct {
-		Txns         []TxnListRow
-		PageMeta     PageMeta
-		Budget       string
-		Account      string
-		ActiveStatus string
-		StatusCounts map[string]int
-	}{
+	data := TxnListData{
 		Txns: enrichTransactionList(r.Context(), txns,
 			s.Syncer.FindBudgetByAccID,
 			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
@@ -1433,6 +1433,7 @@ func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
 		Account:      accID,
 		ActiveStatus: "",
 		StatusCounts: statusCountsStr,
+		Sort:         sort,
 	}
 
 	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", data)

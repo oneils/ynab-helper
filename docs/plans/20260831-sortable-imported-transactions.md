@@ -185,20 +185,20 @@ them — it is not a narrow, single-handler change.
 - Modify: `internal/server/handlers.go`
 - Modify: `internal/server/handlers_test.go`
 
-- [ ] add `FetchTransactionsByAccount(ctx context.Context, accID, status,
+- [x] add `FetchTransactionsByAccount(ctx context.Context, accID, status,
       sortOrder string) ([]Transaction, error)` to the `TransactionStorer`
       interface (`processor.go:15-21`) and update `mockTransactionStore`
       (`processor_test.go:31`) to match
-- [ ] add `Sort string` field to `ProcessParams`; update `Processor.Fetch` to
+- [x] add `Sort string` field to `ProcessParams`; update `Processor.Fetch` to
       pass `params.Sort` through to `txnStore.FetchTransactionsByAccount`
-- [ ] write test `TestProcessorFetch_PassesSortToStore` on the existing
+- [x] write test `TestProcessorFetch_PassesSortToStore` on the existing
       `mockTransactionStore` (asserts the value received matches what was
       passed in `ProcessParams`)
-- [ ] add `parseSortOrder(r *http.Request) string` helper next to
+- [x] add `parseSortOrder(r *http.Request) string` helper next to
       `parsePagination` in `handlers.go` — reads `sort` query/form param,
       returns `"asc"` only on exact case-insensitive match, else defaults to
       `"desc"`
-- [ ] define a named type `TxnListData` in `handlers.go` with the fields
+- [x] define a named type `TxnListData` in `handlers.go` with the fields
       currently duplicated across all 7 render sites — `Txns []TxnListRow`,
       `PageMeta PageMeta`, `Budget string`, `Account string`,
       `ActiveStatus string`, `StatusCounts map[string]int`, plus the new
@@ -207,18 +207,18 @@ them — it is not a narrow, single-handler change.
       `uploadTxnToYnabHandler` (`:797`), `uploadBankTxnsHandler` (`:1069`),
       `saveInlineTxnHandler` (`:1350`), and `bulkSkipTxnsHandler` (`:1438`)
       with it
-- [ ] in each of those 6 handlers plus `bankTxnRowsHandler` and
+- [x] in each of those 6 handlers plus `bankTxnRowsHandler` and
       `importBankTxnsHandler`, call `sort := parseSortOrder(r)`, pass
       `Sort: sort` into the `txn.ProcessParams{...}` used for the `Fetch`
       call, and set `Sort: sort` on the resulting `TxnListData`
       (`bankTxnRowsHandler` and `importBankTxnsHandler` use their own
       per-handler struct today — give both a `Sort` field too, named
       consistently)
-- [ ] write tests `TestParseSortOrder_DefaultsToDesc`,
+- [x] write tests `TestParseSortOrder_DefaultsToDesc`,
       `TestParseSortOrder_ExplicitAsc`,
       `TestParseSortOrder_InvalidValueDefaultsToDesc` (mirroring the
       `TestParsePagination_*` table style)
-- [ ] run `go test ./...` — full suite must pass before task 3
+- [x] run `go test ./...` — full suite must pass before task 3
 
 ### Task 3: Add the sort toggle inside the list panel, wired through HTMX
 

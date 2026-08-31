@@ -14,7 +14,7 @@ import (
 // TransactionStorer defines storage operations for transactions.
 type TransactionStorer interface {
 	InsertTransaction(ctx context.Context, t Transaction) error
-	FetchTransactionsByAccount(ctx context.Context, accID string, status string) ([]Transaction, error)
+	FetchTransactionsByAccount(ctx context.Context, accID, status, sortOrder string) ([]Transaction, error)
 	FindTransactionByID(ctx context.Context, id string) (Transaction, error)
 	UpdateTransactionStatus(ctx context.Context, id string, status TransactionStatus) error
 	CountByStatus(ctx context.Context, accountID string) (map[TransactionStatus]int, error)
@@ -77,6 +77,7 @@ type ProcessParams struct {
 	BudgetID  string
 	AccountID string
 	Status    string
+	Sort      string
 }
 
 // PreviewResult contains preview data for CSV import.
@@ -147,7 +148,7 @@ func (p *Processor) Process(ctx context.Context, params ProcessParams) error {
 
 // Fetch retrieves transactions for an account.
 func (p *Processor) Fetch(ctx context.Context, params ProcessParams) ([]Transaction, error) {
-	return p.txnStore.FetchTransactionsByAccount(ctx, params.AccountID, params.Status)
+	return p.txnStore.FetchTransactionsByAccount(ctx, params.AccountID, params.Status, params.Sort)
 }
 
 // Preview parses pre-parsed CSV data and returns preview without saving to database.

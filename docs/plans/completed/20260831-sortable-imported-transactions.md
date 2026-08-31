@@ -334,11 +334,11 @@ them — it is not a narrow, single-handler change.
 
 ### Task 7: [Final] Update documentation
 
-- [ ] update `FEATURES.md` if this introduces a pattern worth recording
+- [x] update `FEATURES.md` if this introduces a pattern worth recording
       (e.g. "toggle controls that must re-render live inside the swap
       target, not beside it"; "localStorage is now used for one per-browser
       UI preference")
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Technical Details
 

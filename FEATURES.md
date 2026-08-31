@@ -43,12 +43,36 @@ you can process 100+ transactions without page-per-transaction navigation.
 | SKIPPED   | Skipped      |
 | INVALID   | Invalid      |
 
+### Sorting
+
+- List defaults to **newest-first** (`ORDER BY txn_time DESC, id DESC` — the
+  `id` tiebreak keeps same-day transactions in a stable order across
+  infinite-scroll pages, since `txn_time` is date-only).
+- A **sort toggle** button (top of `bank-transactions.tmpl.html`) flips
+  between newest-first and oldest-first. Its label always describes the
+  action a click will perform.
+- The chosen order is carried via a `sort` query/form param and a hidden
+  `#sort-state` input; other controls outside `#txn-list-panel` (status tabs,
+  account select) use `hx-include="#sort-state"` to stay in sync, since their
+  own `hx-get` URLs are never re-rendered by a list response.
+- The choice is persisted per-browser via `localStorage`
+  (`ynab_txn_sort`) — the only client-side persistence in this app, chosen
+  because sort is a standing display preference rather than a per-session
+  filter selection like budget/account/status.
+
 ## Architecture
 
-- **Templates**: `bank-transactions.tmpl.html` (list), `txn-detail-panel.tmpl.html` (detail), `status-tabs.tmpl.html` (tabs)
+- **Templates**: `bank-transactions.tmpl.html` (list, includes the sort
+  toggle), `txn-detail-panel.tmpl.html` (detail), `status-tabs.tmpl.html`
+  (tabs)
 - **CSS**: Split-panel layout in `main.css` (`.txn-split-layout`, `.txn-list-panel`, `.txn-detail-panel`)
 - **HTMX**: Row clicks load detail panel; status tabs filter via `hx-get`; action buttons update via `hx-post`
 - **Routes**: `GET /import-bank-txns` (page), `GET /bank-txns` (filtered list), `GET /bank-txns/rows` (infinite scroll batches), `GET /bank-txns/{id}/detail` (panel)
+- **Pattern to reuse**: a toggle control whose own markup (label/target URL)
+  must change after each click belongs *inside* the swap target it affects
+  (here, inside `bank-transactions.tmpl.html`), not beside it — it then
+  re-renders for free on every response instead of needing an out-of-band
+  swap. Fixed controls (like the status tabs) don't need this.
 
 ## Suggestion Engine
 

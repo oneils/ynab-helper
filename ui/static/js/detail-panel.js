@@ -287,7 +287,7 @@
     }
 
     // Block remember toggle when no payee/category is set.
-    document.body.addEventListener('htmx:beforeRequest', function (e) {
+    function guardRememberToggle(e) {
         if (!e.target || !e.target.classList.contains('remember-checkbox')) return;
         var payeeSel = document.getElementById('detail-payee-select');
         var catSel = document.getElementById('detail-category-select');
@@ -295,14 +295,21 @@
             e.preventDefault();
             e.target.checked = false;
         }
-    });
+    }
+    // htmx:before:request is the v4 event name (was htmx:beforeRequest in 1.x).
+    document.body.addEventListener('htmx:before:request', guardRememberToggle);
 
     // Registered once outside init() so repeated HTMX panel swaps don't stack listeners.
-    document.body.addEventListener('htmx:afterSettle', function (e) {
-        if (e.detail && e.detail.target && e.detail.target.id === 'txn-detail-panel') {
+    function reinitOnDetailPanelSettle(e) {
+        // htmx:after:settle detail is {task, newContent, settleTasks}; the swapped
+        // target lives at detail.task.target.
+        var target = e.detail?.task?.target;
+        if (target && target.id === 'txn-detail-panel') {
             init();
         }
-    });
+    }
+    // htmx:after:settle is the v4 event name (was htmx:afterSettle in 1.x).
+    document.body.addEventListener('htmx:after:settle', reinitOnDetailPanelSettle);
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

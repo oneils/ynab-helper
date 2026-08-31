@@ -1730,7 +1730,7 @@ footer {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
-    margin: var(--spacing-base) var(--spacing-base) 0;
+    margin: var(--spacing-base);
     padding: var(--spacing-xs) var(--spacing-md);
     min-height: 32px;
     font-size: var(--font-size-sm);

@@ -6,11 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/oneils/ynab-helper/internal/sqlite"
 	"github.com/oneils/ynab-helper/internal/txn"
 	"github.com/oneils/ynab-helper/internal/ynab"
 )
@@ -830,6 +833,193 @@ func TestSortToggle_RendersOppositeActionForEachSortState(t *testing.T) {
 	}
 }
 
+func TestTxnRows_RendersV4HxOnAttribute(t *testing.T) {
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+
+	ts, ok := cache["import-txns.tmpl.html"]
+	if !ok {
+		t.Fatalf("template import-txns.tmpl.html not found in cache")
+	}
+
+	data := TxnListData{
+		Txns: []TxnListRow{
+			{Txn: txn.Transaction{ID: "1", Account: txn.BankAccount{ID: "acc1"}}},
+		},
+		ActiveStatus: "DRAFT",
+	}
+
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, "txn-rows", data); err != nil {
+		t.Fatalf("ExecuteTemplate: %v", err)
+	}
+
+	out := buf.String()
+	// v1 name removed in Task 4 now that the CDN version bump (Task 3) is live.
+	if strings.Contains(out, `hx-on::after-request=`) {
+		t.Errorf("expected v1 hx-on::after-request attribute to be removed, got:\n%s", out)
+	}
+	if !strings.Contains(out, `hx-on::after:request=`) {
+		t.Errorf("expected v4 hx-on::after:request attribute to be present, got:\n%s", out)
+	}
+}
+
+func TestTxnDetailPanel_RendersV4HxOnAttribute(t *testing.T) {
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+
+	ts, ok := cache["import-txns.tmpl.html"]
+	if !ok {
+		t.Fatalf("template import-txns.tmpl.html not found in cache")
+	}
+
+	data := struct {
+		Txn             txn.Transaction
+		BudgetID        string
+		Payees          []ynab.Payee
+		Categories      []ynab.Category
+		SugPayeeID      string
+		SugPayeeName    string
+		SugCategoryID   string
+		SugCategoryName string
+		ActiveStatus    string
+	}{
+		Txn:          txn.Transaction{ID: "1", Account: txn.BankAccount{ID: "acc1"}},
+		BudgetID:     "budget1",
+		ActiveStatus: "DRAFT",
+	}
+
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, "txn-detail-panel", data); err != nil {
+		t.Fatalf("ExecuteTemplate: %v", err)
+	}
+
+	out := buf.String()
+	// v1 name removed in Task 4 now that the CDN version bump (Task 3) is live.
+	if strings.Contains(out, `hx-on::after-request=`) {
+		t.Errorf("expected v1 hx-on::after-request attribute to be removed, got:\n%s", out)
+	}
+	if !strings.Contains(out, `hx-on::after:request=`) {
+		t.Errorf("expected v4 hx-on::after:request attribute to be present, got:\n%s", out)
+	}
+}
+
+// --- v4 htmx response header tests (Task 3) ---
+// Task 1 confirmed HX-Trigger/HX-Refresh/HX-Redirect/HX-Reswap are unchanged
+// in name and semantics under htmx 4. These tests close the pre-migration
+// zero-coverage gap on those headers so a future accidental rename is caught.
+
+func TestSaveParserMappingHandler_SetsShowToastTrigger(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := sqlite.New(sqlite.Config{Path: dbPath})
+	if err != nil {
+		t.Fatalf("sqlite.New: %v", err)
+	}
+	defer func() { _ = db.Close(context.Background()) }()
+
+	s := &Server{
+		DB:           db,
+		TxnProcessor: txn.NewProcessor(nil, nil, nil, nil, nil, nil),
+	}
+
+	form := url.Values{"parser_name": {""}}
+	req := httptest.NewRequest(http.MethodPost, "/settings/parser-mappings/acc1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.routes().ServeHTTP(rec, req)
+
+	got := rec.Header().Get("HX-Trigger")
+	want := `{"showToast": {"message": "Parser mapping saved", "type": "success"}}`
+	if got != want {
+		t.Errorf("HX-Trigger = %q, want %q", got, want)
+	}
+}
+
+func TestSaveInlineTxnHandler_MissingPayeeOrCategory_SetsWarningTriggerAndReswapNone(t *testing.T) {
+	s := &Server{}
+
+	form := url.Values{"budget": {"b1"}, "account": {"acc1"}}
+	req := httptest.NewRequest(http.MethodPost, "/bank-txns/txn1/save-inline", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	s.routes().ServeHTTP(rec, req)
+
+	wantTrigger := `{"showToast": {"message": "Select both a payee and category to remember selections", "type": "warning"}}`
+	if got := rec.Header().Get("HX-Trigger"); got != wantTrigger {
+		t.Errorf("HX-Trigger = %q, want %q", got, wantTrigger)
+	}
+	if got := rec.Header().Get("HX-Reswap"); got != "none" {
+		t.Errorf("HX-Reswap = %q, want %q", got, "none")
+	}
+}
+
+// fakeYnabClient/fakeBudgetStorer/fakeHistoryStorer satisfy the ynab.Syncer's
+// dependency interfaces with the minimum behavior needed to exercise
+// syncBudgetsHandler's HX-Refresh header without hitting a real YNAB API.
+type fakeYnabClient struct{}
+
+func (fakeYnabClient) FetchBudgets() ([]ynab.Budget, error) { return nil, nil }
+func (fakeYnabClient) FetchAccounts(ynab.SyncReq) (ynab.AccountData, error) {
+	return ynab.AccountData{}, nil
+}
+func (fakeYnabClient) FetchCategories(ynab.SyncReq) (ynab.CategoryData, error) {
+	return ynab.CategoryData{}, nil
+}
+func (fakeYnabClient) FetchPayees(ynab.SyncReq) (ynab.PayeeData, error) {
+	return ynab.PayeeData{}, nil
+}
+func (fakeYnabClient) Upload(ynab.TxnReq) error { return nil }
+
+type fakeBudgetStorer struct{}
+
+func (fakeBudgetStorer) UpsertBudget(context.Context, ynab.Budget) error { return nil }
+func (fakeBudgetStorer) FetchAllBudgets(context.Context) ([]ynab.Budget, error) {
+	return nil, nil
+}
+func (fakeBudgetStorer) FindBudgetByID(context.Context, string) (ynab.Budget, error) {
+	return ynab.Budget{}, nil
+}
+func (fakeBudgetStorer) FindBudgetByAccountID(context.Context, string) (ynab.Budget, error) {
+	return ynab.Budget{}, nil
+}
+
+type fakeHistoryStorer struct{}
+
+func (fakeHistoryStorer) UpsertSyncHistory(context.Context, ynab.SyncHistory) error { return nil }
+func (fakeHistoryStorer) FetchAllSyncHistory(context.Context) ([]ynab.SyncHistory, error) {
+	return nil, nil
+}
+func (fakeHistoryStorer) FindSyncHistoryByBudget(context.Context, string) ([]ynab.SyncHistory, error) {
+	return nil, nil
+}
+
+func TestSyncBudgetsHandler_SetsHXRefresh(t *testing.T) {
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+
+	s := &Server{
+		Syncer:        ynab.NewSyncer(fakeYnabClient{}, fakeBudgetStorer{}, nil, nil, nil, fakeHistoryStorer{}),
+		TemplateCache: cache,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/ynab-budgets-sync", nil)
+	rec := httptest.NewRecorder()
+
+	s.routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("HX-Refresh"); got != "true" {
+		t.Errorf("HX-Refresh = %q, want %q", got, "true")
+	}
+}
+
 func TestNewPageMeta_SinglePage(t *testing.T) {
 	pm := newPageMeta(1, 50, 30)
 	if pm.TotalPages != 1 {
@@ -910,6 +1100,40 @@ func TestDetectCSVComma(t *testing.T) {
 				t.Errorf("detectCSVComma() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIndex_RendersHtmxV4ScriptTag(t *testing.T) {
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+	ts, ok := cache["home.tmpl.html"]
+	if !ok {
+		t.Fatalf("template home.tmpl.html not found in cache")
+	}
+
+	data := struct {
+		Budgets []ynab.Budget
+		Accs    []ynab.Account
+		Txns    []TxnListRow
+		Account string
+	}{}
+
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, baseTmpl, data); err != nil {
+		t.Fatalf("ExecuteTemplate: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, `src="https://unpkg.com/htmx.org@4.`) {
+		t.Errorf("expected htmx script tag to reference version 4, got:\n%s", out)
+	}
+	if !strings.Contains(out, `integrity="sha384-`) {
+		t.Errorf("expected non-empty integrity attribute on htmx script tag, got:\n%s", out)
+	}
+	if !strings.Contains(out, `crossorigin="anonymous"`) {
+		t.Errorf("expected crossorigin attribute on htmx script tag, got:\n%s", out)
 	}
 }
 

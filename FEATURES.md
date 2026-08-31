@@ -20,7 +20,7 @@ you can process 100+ transactions without page-per-transaction navigation.
 ### Split-Panel Review
 
 - **Filter card** (sticky at top): unified budget/account selector and status tabs — All / Needs Review / Accepted / Skipped / Invalid with per-status counts
-- **List rows** display: Date, Description (truncated), Amount, Payee, Category, Status; loaded via **infinite scroll** (HTMX sentinel row, `GET /bank-txns/rows`)
+- **List rows** display: Date, Description (truncated), Amount, Payee, Category, Status; loaded via **infinite scroll** (HTMX v4 sentinel row, `GET /bank-txns/rows`)
 - Rows with YNAB payee matches show an "auto" badge
 - Click a row to open the **detail panel**, which is sticky and dynamically positioned below the filter card so they never overlap
 
@@ -66,8 +66,18 @@ you can process 100+ transactions without page-per-transaction navigation.
   toggle), `txn-detail-panel.tmpl.html` (detail), `status-tabs.tmpl.html`
   (tabs)
 - **CSS**: Split-panel layout in `main.css` (`.txn-split-layout`, `.txn-list-panel`, `.txn-detail-panel`)
-- **HTMX**: Row clicks load detail panel; status tabs filter via `hx-get`; action buttons update via `hx-post`
+- **HTMX (v4.0.0, CDN-only, no npm/bundler)**: Row clicks load detail panel; status tabs filter via `hx-get`; action buttons update via `hx-post`
 - **Routes**: `GET /import-bank-txns` (page), `GET /bank-txns` (filtered list), `GET /bank-txns/rows` (infinite scroll batches), `GET /bank-txns/{id}/detail` (panel)
+- **HTMX v1→v4 event mapping** (migrated 2026-08-31; see `docs/plans/completed/20260831-htmx4-migration.md` for full audit): htmx 4 restructured all `htmx:*` events to a `htmx:phase:action[:sub-action]` pattern and moved requests from `XMLHttpRequest` to `fetch()`. Names in use in this codebase:
+  - `htmx:beforeRequest` → `htmx:before:request`
+  - `htmx:afterRequest` → `htmx:after:request`
+  - `htmx:beforeSwap` → `htmx:before:swap`
+  - `htmx:afterSwap` → `htmx:after:swap`
+  - `htmx:afterSettle` → `htmx:after:settle`
+  - `hx-on::after-request` → `hx-on::after:request`
+  - `htmx:xhr:progress` → removed, no replacement (fetch exposes no upload-progress signal); the upload progress bar was downgraded to an indeterminate indicator in `ui/static/js/main.js`
+  - Response headers (`HX-Trigger`, `HX-Refresh`, `HX-Redirect`, `HX-Reswap`, set in `internal/server/handlers.go`) are **unchanged** in v4 — no renaming happened server-side
+  - `evt.preventDefault()`-based request cancellation is unchanged in v4, but the `detail` payload shape moved: `after:swap` exposes the target at `detail.ctx.target`, `after:settle` exposes it at `detail.task.target` (there is no top-level `detail.target` in v4)
 - **Pattern to reuse**: a toggle control whose own markup (label/target URL)
   must change after each click belongs *inside* the swap target it affects
   (here, inside `bank-transactions.tmpl.html`), not beside it — it then

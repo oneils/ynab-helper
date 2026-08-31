@@ -151,28 +151,28 @@ them — it is not a narrow, single-handler change.
 - Modify: `internal/sqlite/transaction_store.go`
 - Modify: `internal/sqlite/transaction_store_test.go`
 
-- [ ] change `FetchTransactionsByAccount(ctx, accID, status string)` to
+- [x] change `FetchTransactionsByAccount(ctx, accID, status string)` to
       `FetchTransactionsByAccount(ctx, accID, status, sortOrder string)`
-- [ ] normalize `sortOrder` to a whitelisted `ASC`/`DESC` SQL fragment
+- [x] normalize `sortOrder` to a whitelisted `ASC`/`DESC` SQL fragment
       (`dir := "DESC"; if strings.EqualFold(sortOrder, "asc") { dir = "ASC" }`)
       — never interpolate the raw param directly, keep it to the two literal
       values to avoid any injection surface
-- [ ] replace `query += " ORDER BY txn_time ASC"` with
+- [x] replace `query += " ORDER BY txn_time ASC"` with
       `query += " ORDER BY txn_time " + dir + ", id " + dir` — the second key
       gives same-day transactions (all parsers are date-only, see Context) a
       deterministic order so infinite-scroll pages never duplicate/skip rows
-- [ ] write test `TestFetchTransactionsByAccount_SortDesc` — insert several
+- [x] write test `TestFetchTransactionsByAccount_SortDesc` — insert several
       transactions with distinct `txn_time`, fetch with `sortOrder="desc"`,
       assert descending order
-- [ ] write test `TestFetchTransactionsByAccount_SortAsc` — same setup,
+- [x] write test `TestFetchTransactionsByAccount_SortAsc` — same setup,
       `sortOrder="asc"`, assert ascending order
-- [ ] write test `TestFetchTransactionsByAccount_TiedTxnTimeIsStable` —
+- [x] write test `TestFetchTransactionsByAccount_TiedTxnTimeIsStable` —
       insert multiple transactions sharing one `txn_time`, run the query
       twice (both `asc` and `desc`), assert identical row order both times
-- [ ] write test `TestFetchTransactionsByAccount_SortInvalidDefaultsToDesc` —
+- [x] write test `TestFetchTransactionsByAccount_SortInvalidDefaultsToDesc` —
       garbage `sortOrder` value (e.g. `"'; DROP TABLE"`) falls back to
       descending, proving the whitelist holds
-- [ ] run `go test ./internal/sqlite/...` — must pass before task 2 (the
+- [x] run `go test ./internal/sqlite/...` — must pass before task 2 (the
       wider `go test ./...` is expected to fail until Task 2 updates the
       `TransactionStorer` interface and its mock — that's fine, not a
       regression to chase down here)

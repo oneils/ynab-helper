@@ -76,6 +76,58 @@ YNAB_TOKEN=your_token make run
 
 The dev server starts on `:5002`.
 
+In `fish` shell, the `VAR=val cmd` syntax above doesn't set the variable
+for `cmd` the way it does in bash — use `env` instead:
+
+```fish
+env YNAB_TOKEN=your_token go run ./cmd/ynab-helper
+```
+
+### Test mode
+
+To exercise the UI without a real YNAB account, run:
+
+```bash
+make run-mock
+```
+
+This starts the app with `--mock-ynab`, which swaps the real YNAB HTTP
+client for an in-memory `ynab.FakeClient` backed by a built-in JSON
+fixture (one budget with two accounts, a couple of category groups, and a
+few payees). Uploads are no-ops that always succeed, and no requests ever
+reach the real YNAB API. A "TEST MODE" banner is shown in the UI whenever
+mock mode is active.
+
+`make run-mock` is equivalent to setting the flags/env vars yourself, e.g.
+in `fish`:
+
+```fish
+env MOCK_YNAB=true \
+    SQLITE_DB_PATH=./data/ynab-mock.db \
+    go run ./cmd/ynab-helper
+```
+
+or in `bash`/`zsh`:
+
+```bash
+MOCK_YNAB=true SQLITE_DB_PATH=./data/ynab-mock.db go run ./cmd/ynab-helper
+```
+
+`YNAB_TOKEN` and `YNAB_API` are ignored when `MOCK_YNAB=true` — the real
+`ynab.Client` is never constructed in mock mode, so it's fine to leave
+them set or unset. `SQLITE_DB_PATH` is the one setting worth keeping in
+sync with `run-mock`'s default (`./data/ynab-mock.db`); without it, mock
+data lands in the same `./data/ynab.db` that plain `make run` uses.
+
+`make run-mock` points `--sqlite-path` at `./data/ynab-mock.db`, a
+database file separate from the one `make run` uses (`./data/ynab.db`),
+so mock data never mixes with real data.
+
+To use your own fixture data instead of the built-in default, set
+`MOCK_DATA_FILE` to the path of a JSON file shaped like `Fixture` in
+`internal/ynab/fixture.go` (see `internal/ynab/fixtures/default.json` for
+an example).
+
 ## Configuration
 
 All options can be set as environment variables or CLI flags.
@@ -87,6 +139,8 @@ All options can be set as environment variables or CLI flags.
 | `YNAB_API` | `--ynab-api` | `https://api.youneedabudget.com/v1` | YNAB API base URL |
 | `SYNC_INTERVAL` | `--sync-interval` | `1h` | How often to automatically sync YNAB data (budgets, accounts, payees, categories) |
 | `SQLITE_DB_PATH` | `--sqlite-path` | `./data/ynab.db` | SQLite database file path |
+| `MOCK_YNAB` | `--mock-ynab` | `false` | Use an in-memory mock YNAB client instead of the real YNAB API (for local UI testing) |
+| `MOCK_DATA_FILE` | `--mock-data-file` | — | Path to a JSON fixture overriding the built-in mock YNAB data (only used with `--mock-ynab`) |
 
 ## Database
 

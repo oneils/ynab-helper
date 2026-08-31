@@ -1526,8 +1526,9 @@ func (s *Server) categorySuggestionsHandler(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// NewTemplateCache creates a template cache.
-func NewTemplateCache() (map[string]*template.Template, error) {
+// NewTemplateCache creates a template cache. mockMode controls whether the
+// "TEST MODE" banner renders in the base template.
+func NewTemplateCache(mockMode bool) (map[string]*template.Template, error) {
 	cache := map[string]*template.Template{}
 
 	pages, err := fs.Glob(ui.Files, "html/*/*.tmpl.html")
@@ -1544,7 +1545,9 @@ func NewTemplateCache() (map[string]*template.Template, error) {
 			page,
 		}
 
-		ts, err := template.New(name).ParseFS(ui.Files, patterns...)
+		ts, err := template.New(name).Funcs(template.FuncMap{
+			"mockMode": func() bool { return mockMode },
+		}).ParseFS(ui.Files, patterns...)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", name, err)
 		}

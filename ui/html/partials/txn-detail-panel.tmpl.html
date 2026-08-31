@@ -60,7 +60,7 @@
             hx-include="#detail-form"
             hx-target="#txn-list-panel"
             hx-swap="innerHTML"
-            hx-confirm="Send this transaction to YNAB?"
+            hx-disabled-elt="this"
             hx-on::after-request="if(window.closeTxnDetail) window.closeTxnDetail()"
         >
             Accept &amp; Send to YNAB
@@ -81,7 +81,7 @@
             hx-post="/bank-txns/{{.Txn.ID}}/skip?accId={{.Txn.Account.ID}}&status={{.ActiveStatus}}"
             hx-target="#txn-list-panel"
             hx-swap="innerHTML"
-            hx-confirm="Skip this transaction?"
+            hx-disabled-elt="this"
             hx-on::after-request="if(window.closeTxnDetail) window.closeTxnDetail()"
         >
             Skip

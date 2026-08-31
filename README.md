@@ -112,6 +112,10 @@ SQLite with automatic migrations on startup.
 | `SKIPPED` | Manually skipped |
 | `INVALID` | Could not be parsed |
 
+## Transaction list ordering
+
+The Imported Transactions list defaults to newest-first. Use the sort toggle at the top of the list to switch to oldest-first — your choice is remembered in the browser (localStorage).
+
 ## Development
 
 ```bash

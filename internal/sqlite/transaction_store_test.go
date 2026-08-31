@@ -135,6 +135,11 @@ func TestFetchTransactionsByAccount_TiedTxnTimeIsStable(t *testing.T) {
 	insertTestTxnWithTime(t, db, "txn-a", accID, "DRAFT", "2026-01-01T00:00:00Z")
 	insertTestTxnWithTime(t, db, "txn-c", accID, "DRAFT", "2026-01-01T00:00:00Z")
 
+	wantOrders := map[string][]string{
+		"asc":  {"txn-a", "txn-b", "txn-c"},
+		"desc": {"txn-c", "txn-b", "txn-a"},
+	}
+
 	for _, sortOrder := range []string{"asc", "desc"} {
 		first, err := store.FetchTransactionsByAccount(ctx, accID, "", sortOrder)
 		if err != nil {
@@ -144,12 +149,16 @@ func TestFetchTransactionsByAccount_TiedTxnTimeIsStable(t *testing.T) {
 		if err != nil {
 			t.Fatalf("FetchTransactionsByAccount (%s) run 2: %v", sortOrder, err)
 		}
-		if len(first) != len(second) {
-			t.Fatalf("sortOrder %s: run lengths differ: %d vs %d", sortOrder, len(first), len(second))
-		}
-		for i := range first {
-			if first[i].ID != second[i].ID {
-				t.Errorf("sortOrder %s: index %d: run1=%s run2=%s", sortOrder, i, first[i].ID, second[i].ID)
+
+		wantOrder := wantOrders[sortOrder]
+		for _, got := range [][]txn.Transaction{first, second} {
+			if len(got) != len(wantOrder) {
+				t.Fatalf("sortOrder %s: expected %d transactions, got %d", sortOrder, len(wantOrder), len(got))
+			}
+			for i, id := range wantOrder {
+				if got[i].ID != id {
+					t.Errorf("sortOrder %s: index %d: expected %s, got %s", sortOrder, i, id, got[i].ID)
+				}
 			}
 		}
 	}

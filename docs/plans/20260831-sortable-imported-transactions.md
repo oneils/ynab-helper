@@ -279,7 +279,7 @@ them — it is not a narrow, single-handler change.
 **Files:**
 - Modify: `ui/html/pages/import-txns.tmpl.html`
 
-- [ ] extend the existing inline `<script>` IIFE (around line 60) with: on
+- [x] extend the existing inline `<script>` IIFE (around line 60) with: on
       load, read `localStorage.getItem('ynab_txn_sort')`; if it's a valid
       value (`"asc"`/`"desc"`), a budget is selected (`{{if .Budget}}` guard,
       server-side), and it differs from the server-rendered `{{.Sort}}`,
@@ -289,9 +289,9 @@ them — it is not a narrow, single-handler change.
       `#account`, the active `.status-tab`'s status, read directly rather
       than re-deriving), so the returning user's preference wins over the
       hardcoded newest-first default without a jarring second render
-- [ ] confirm the toggle button's `onclick` (added in Task 3) writes the
+- [x] confirm the toggle button's `onclick` (added in Task 3) writes the
       clicked-to value to `localStorage.setItem('ynab_txn_sort', ...)`
-- [ ] run full test suite — must pass before task 5 (no new Go code in this
+- [x] run full test suite — must pass before task 5 (no new Go code in this
       task; template-rendering coverage for the toggle itself was written in
       Task 3, since that's where the templates were introduced)
 

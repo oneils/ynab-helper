@@ -117,21 +117,29 @@
         init();
     }
 
-    // Reinitialize after HTMX swaps
-    document.body.addEventListener('htmx:afterSwap', function(event) {
+    function reinitOnSwap(event) {
+        // htmx:after:swap detail is {ctx}; the swapped target lives at detail.ctx.target.
+        var target = event.detail.ctx?.target;
         // Only reinit if the swap might have added new datalist inputs
-        if (event.detail.target.classList?.contains('txn-row') ||
-            event.detail.target.id === 'transactions') {
+        if (target?.classList?.contains('txn-row') ||
+            target?.id === 'transactions') {
             setTimeout(reinit, 10); // Small delay to ensure DOM is updated
         }
-    });
+    }
 
-    // Also listen for HTMX afterSettle for dynamic content
-    document.body.addEventListener('htmx:afterSettle', function(event) {
-        if (event.detail.target.classList?.contains('txn-row') ||
-            event.detail.target.id === 'transactions') {
+    function reinitOnSettle(event) {
+        // htmx:after:settle detail is {task, newContent, settleTasks}; the swapped
+        // target lives at detail.task.target.
+        var target = event.detail.task?.target;
+        if (target?.classList?.contains('txn-row') ||
+            target?.id === 'transactions') {
             setTimeout(reinit, 10);
         }
-    });
+    }
+
+    // htmx:after:swap/htmx:after:settle are the v4 event names (were
+    // htmx:afterSwap/htmx:afterSettle in 1.x).
+    document.body.addEventListener('htmx:after:swap', reinitOnSwap);
+    document.body.addEventListener('htmx:after:settle', reinitOnSettle);
 
 })();

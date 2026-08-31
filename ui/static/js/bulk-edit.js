@@ -250,13 +250,17 @@
         init();
     }
 
-    // Reinitialize after HTMX swaps
-    document.body.addEventListener('htmx:afterSwap', function(event) {
+    function reinitOnSwap(event) {
+        // htmx:after:swap detail is {ctx}; the swapped target lives at detail.ctx.target.
+        var target = event.detail.ctx?.target;
         // Only reinit if the swap affected the transactions section
-        if (event.detail.target.id === 'transactions' ||
-            event.detail.target.classList.contains('txn-row')) {
+        if (target?.id === 'transactions' ||
+            target?.classList?.contains('txn-row')) {
             setTimeout(reinit, 10); // Small delay to ensure DOM is updated
         }
-    });
+    }
+
+    // htmx:after:swap is the v4 event name (was htmx:afterSwap in 1.x).
+    document.body.addEventListener('htmx:after:swap', reinitOnSwap);
 
 })();

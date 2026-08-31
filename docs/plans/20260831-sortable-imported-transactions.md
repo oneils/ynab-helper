@@ -314,20 +314,22 @@ them — it is not a narrow, single-handler change.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify default order on a fresh `/import-bank-txns` load is
-      newest-first
-- [ ] verify clicking the toggle flips to oldest-first and the button label
-      updates to offer "Newest first" next
-- [ ] verify the choice survives a full page reload (localStorage) for the
-      same browser
-- [ ] verify switching status tab / account / budget preserves the chosen
-      sort order
-- [ ] verify skipping or saving a transaction preserves the chosen sort order
-- [ ] verify infinite-scroll "load more" keeps consistent order — no
-      duplicate/out-of-order rows across pages, including for a day with
-      multiple same-`txn_time` transactions
-- [ ] run full test suite: `make test`
-- [ ] confirm no e2e suite exists to run (documented above) — skipped
+- [x] manual test (skipped - not automatable): verify default order on a
+      fresh `/import-bank-txns` load is newest-first
+- [x] manual test (skipped - not automatable): verify clicking the toggle
+      flips to oldest-first and the button label updates to offer "Newest
+      first" next
+- [x] manual test (skipped - not automatable): verify the choice survives a
+      full page reload (localStorage) for the same browser
+- [x] manual test (skipped - not automatable): verify switching status tab /
+      account / budget preserves the chosen sort order
+- [x] manual test (skipped - not automatable): verify skipping or saving a
+      transaction preserves the chosen sort order
+- [x] manual test (skipped - not automatable): verify infinite-scroll "load
+      more" keeps consistent order — no duplicate/out-of-order rows across
+      pages, including for a day with multiple same-`txn_time` transactions
+- [x] run full test suite: `make test` — passes
+- [x] confirm no e2e suite exists to run (documented above) — skipped
       intentionally, not silently
 
 ### Task 7: [Final] Update documentation

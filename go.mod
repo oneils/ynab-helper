@@ -6,7 +6,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/pressly/goose/v3 v3.27.3
-	golang.org/x/text v0.40.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.54.0
 )
 

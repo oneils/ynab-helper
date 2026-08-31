@@ -6,6 +6,7 @@
         hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status="
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
+        hx-include="#sort-state"
         onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
     >
         All
@@ -16,6 +17,7 @@
         hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=DRAFT"
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
+        hx-include="#sort-state"
         onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
     >
         Needs Review
@@ -29,6 +31,7 @@
         hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=PROCESSED"
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
+        hx-include="#sort-state"
         onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
     >
         Accepted
@@ -42,6 +45,7 @@
         hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=SKIPPED"
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
+        hx-include="#sort-state"
         onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
     >
         Skipped
@@ -55,6 +59,7 @@
         hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status=INVALID"
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
+        hx-include="#sort-state"
         onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
     >
         Invalid

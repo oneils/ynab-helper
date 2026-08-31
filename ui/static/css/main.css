@@ -1715,6 +1715,42 @@ footer {
     opacity: 0.5;
 }
 
+/* Sort Toggle */
+.sort-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin: var(--spacing-base) var(--spacing-base) 0;
+    padding: var(--spacing-xs) var(--spacing-md);
+    min-height: 32px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    background: transparent;
+    color: var(--ui-primary);
+    border: 1px solid var(--ui-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sort-toggle svg {
+    width: 14px;
+    height: 14px;
+}
+
+.sort-toggle:hover:not(:disabled) {
+    background: var(--ui-primary);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.sort-toggle:disabled {
+    color: var(--text-muted);
+    border-color: var(--bg-border);
+    opacity: 0.5;
+    cursor: default;
+}
+
 .pagination-info {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);

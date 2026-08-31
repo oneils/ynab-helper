@@ -51,12 +51,144 @@ func setupTestDB(t *testing.T) *sql.DB {
 func insertTestTxn(t *testing.T, db *sql.DB, id, accountID, status string) {
 	t.Helper()
 	now := time.Now().UTC().Format(time.RFC3339)
+	insertTestTxnWithTime(t, db, id, accountID, status, now)
+}
+
+func insertTestTxnWithTime(t *testing.T, db *sql.DB, id, accountID, status, txnTime string) {
+	t.Helper()
+	now := time.Now().UTC().Format(time.RFC3339)
 	query := `
-		INSERT INTO transactions (id, amount, currency, description, payee, account_id, account_name, status, created_at, txn_time)
-		VALUES (?, 12.34, 'USD', 'test desc', 'test payee', ?, 'Test Account', ?, ?, ?)
+		INSERT INTO transactions (id, amount, currency, description, payee, account_id, account_name, status, created_at, txn_time, raw_text, raw_line_number, error_msg)
+		VALUES (?, 12.34, 'USD', 'test desc', 'test payee', ?, 'Test Account', ?, ?, ?, '', 0, '')
 	`
-	if _, err := db.Exec(query, id, accountID, status, now, now); err != nil {
+	if _, err := db.Exec(query, id, accountID, status, now, txnTime); err != nil {
 		t.Fatalf("insert test txn: %v", err)
+	}
+}
+
+func TestFetchTransactionsByAccount_SortDesc(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	store := NewTransactionStore(db)
+	ctx := context.Background()
+	accID := "acc-sort-desc"
+
+	insertTestTxnWithTime(t, db, "txn-1", accID, "DRAFT", "2026-01-01T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-2", accID, "DRAFT", "2026-01-03T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-3", accID, "DRAFT", "2026-01-02T00:00:00Z")
+
+	txns, err := store.FetchTransactionsByAccount(ctx, accID, "", "desc")
+	if err != nil {
+		t.Fatalf("FetchTransactionsByAccount: %v", err)
+	}
+
+	wantOrder := []string{"txn-2", "txn-3", "txn-1"}
+	if len(txns) != len(wantOrder) {
+		t.Fatalf("expected %d transactions, got %d", len(wantOrder), len(txns))
+	}
+	for i, id := range wantOrder {
+		if txns[i].ID != id {
+			t.Errorf("index %d: expected %s, got %s", i, id, txns[i].ID)
+		}
+	}
+}
+
+func TestFetchTransactionsByAccount_SortAsc(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	store := NewTransactionStore(db)
+	ctx := context.Background()
+	accID := "acc-sort-asc"
+
+	insertTestTxnWithTime(t, db, "txn-1", accID, "DRAFT", "2026-01-01T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-2", accID, "DRAFT", "2026-01-03T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-3", accID, "DRAFT", "2026-01-02T00:00:00Z")
+
+	txns, err := store.FetchTransactionsByAccount(ctx, accID, "", "asc")
+	if err != nil {
+		t.Fatalf("FetchTransactionsByAccount: %v", err)
+	}
+
+	wantOrder := []string{"txn-1", "txn-3", "txn-2"}
+	if len(txns) != len(wantOrder) {
+		t.Fatalf("expected %d transactions, got %d", len(wantOrder), len(txns))
+	}
+	for i, id := range wantOrder {
+		if txns[i].ID != id {
+			t.Errorf("index %d: expected %s, got %s", i, id, txns[i].ID)
+		}
+	}
+}
+
+func TestFetchTransactionsByAccount_TiedTxnTimeIsStable(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	store := NewTransactionStore(db)
+	ctx := context.Background()
+	accID := "acc-sort-tied"
+
+	// All same txn_time - only the id tiebreaker can order these deterministically.
+	insertTestTxnWithTime(t, db, "txn-b", accID, "DRAFT", "2026-01-01T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-a", accID, "DRAFT", "2026-01-01T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-c", accID, "DRAFT", "2026-01-01T00:00:00Z")
+
+	wantOrders := map[string][]string{
+		"asc":  {"txn-a", "txn-b", "txn-c"},
+		"desc": {"txn-c", "txn-b", "txn-a"},
+	}
+
+	for _, sortOrder := range []string{"asc", "desc"} {
+		first, err := store.FetchTransactionsByAccount(ctx, accID, "", sortOrder)
+		if err != nil {
+			t.Fatalf("FetchTransactionsByAccount (%s) run 1: %v", sortOrder, err)
+		}
+		second, err := store.FetchTransactionsByAccount(ctx, accID, "", sortOrder)
+		if err != nil {
+			t.Fatalf("FetchTransactionsByAccount (%s) run 2: %v", sortOrder, err)
+		}
+
+		wantOrder := wantOrders[sortOrder]
+		for _, got := range [][]txn.Transaction{first, second} {
+			if len(got) != len(wantOrder) {
+				t.Fatalf("sortOrder %s: expected %d transactions, got %d", sortOrder, len(wantOrder), len(got))
+			}
+			for i, id := range wantOrder {
+				if got[i].ID != id {
+					t.Errorf("sortOrder %s: index %d: expected %s, got %s", sortOrder, i, id, got[i].ID)
+				}
+			}
+		}
+	}
+}
+
+func TestFetchTransactionsByAccount_SortInvalidDefaultsToDesc(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	store := NewTransactionStore(db)
+	ctx := context.Background()
+	accID := "acc-sort-invalid"
+
+	insertTestTxnWithTime(t, db, "txn-1", accID, "DRAFT", "2026-01-01T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-2", accID, "DRAFT", "2026-01-03T00:00:00Z")
+	insertTestTxnWithTime(t, db, "txn-3", accID, "DRAFT", "2026-01-02T00:00:00Z")
+
+	txns, err := store.FetchTransactionsByAccount(ctx, accID, "", "'; DROP TABLE")
+	if err != nil {
+		t.Fatalf("FetchTransactionsByAccount: %v", err)
+	}
+
+	wantOrder := []string{"txn-2", "txn-3", "txn-1"}
+	if len(txns) != len(wantOrder) {
+		t.Fatalf("expected %d transactions, got %d", len(wantOrder), len(txns))
+	}
+	for i, id := range wantOrder {
+		if txns[i].ID != id {
+			t.Errorf("index %d: expected %s, got %s", i, id, txns[i].ID)
+		}
 	}
 }
 

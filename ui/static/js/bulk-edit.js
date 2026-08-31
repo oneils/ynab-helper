@@ -124,6 +124,11 @@
         });
         params.append('account_id', accountId);
 
+        const sortState = document.getElementById('sort-state');
+        if (sortState) {
+            params.append('sort', sortState.value);
+        }
+
         // Send POST request
         fetch('/bank-txns/bulk-skip', {
             method: 'POST',

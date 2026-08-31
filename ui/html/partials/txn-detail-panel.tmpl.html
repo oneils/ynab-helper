@@ -57,7 +57,7 @@
         <button type="button"
             class="button-primary"
             hx-post="/ynab-add-txn?status={{.ActiveStatus}}"
-            hx-include="#detail-form"
+            hx-include="#detail-form, #sort-state"
             hx-target="#txn-list-panel"
             hx-swap="innerHTML"
             hx-disabled-elt="this"
@@ -69,7 +69,7 @@
             <input type="checkbox"
                 class="remember-checkbox"
                 hx-post="/bank-txns/{{.Txn.ID}}/save-inline?status={{.ActiveStatus}}"
-                hx-include="#detail-form"
+                hx-include="#detail-form, #sort-state"
                 hx-target="#txn-list-panel"
                 hx-swap="innerHTML"
                 hx-trigger="change[this.checked]">
@@ -81,6 +81,7 @@
             hx-post="/bank-txns/{{.Txn.ID}}/skip?accId={{.Txn.Account.ID}}&status={{.ActiveStatus}}"
             hx-target="#txn-list-panel"
             hx-swap="innerHTML"
+            hx-include="#sort-state"
             hx-disabled-elt="this"
             hx-on::after-request="if(window.closeTxnDetail) window.closeTxnDetail()"
         >

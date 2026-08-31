@@ -67,7 +67,7 @@ func (s *TransactionStore) InsertTransaction(ctx context.Context, t txn.Transact
 }
 
 // FetchTransactionsByAccount fetches transactions for a specific account.
-func (s *TransactionStore) FetchTransactionsByAccount(ctx context.Context, accID string, status string) ([]txn.Transaction, error) {
+func (s *TransactionStore) FetchTransactionsByAccount(ctx context.Context, accID string, status string, sortOrder string) ([]txn.Transaction, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -97,7 +97,16 @@ func (s *TransactionStore) FetchTransactionsByAccount(ctx context.Context, accID
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	query += " ORDER BY txn_time ASC"
+	// Whitelist sortOrder to the two literal SQL fragments - never interpolate
+	// the raw param directly, to avoid any injection surface.
+	dir := "DESC"
+	if strings.EqualFold(sortOrder, "asc") {
+		dir = "ASC"
+	}
+	// txn_time is date-only (no time component - see parsers), so same-day
+	// transactions tie; id is a deterministic tiebreaker so infinite-scroll
+	// pages never duplicate/skip rows.
+	query += " ORDER BY txn_time " + dir + ", id " + dir
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {

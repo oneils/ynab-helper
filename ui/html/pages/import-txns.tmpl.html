@@ -85,6 +85,40 @@
     if (window.ResizeObserver) {
         new ResizeObserver(syncDetailTop).observe(filterCard);
     }
+
+    // Apply the browser's stored sort preference if it differs from the
+    // server-rendered default, so a returning user's choice survives reload.
+    // htmx is loaded later in the base layout, so defer until it's ready.
+    {{if .Budget}}
+    var storedSort = localStorage.getItem('ynab_txn_sort');
+    if (storedSort === 'asc' || storedSort === 'desc') {
+        var serverSort = '{{.Sort}}';
+        if (storedSort !== serverSort) {
+            var restoreSort = function () {
+                var budgetEl = document.getElementById('budget-filter');
+                var accountEl = document.getElementById('account');
+                var activeStatusEl = document.querySelector('#status-tabs .status-tab--active');
+                var budget = budgetEl ? budgetEl.value : '';
+                var account = accountEl ? accountEl.value : '';
+                var status = '';
+                if (activeStatusEl) {
+                    var statusUrl = new URL(activeStatusEl.getAttribute('hx-get'), window.location.origin);
+                    status = statusUrl.searchParams.get('status') || '';
+                }
+                var url = '/bank-txns?budget=' + encodeURIComponent(budget) +
+                    '&account=' + encodeURIComponent(account) +
+                    '&status=' + encodeURIComponent(status) +
+                    '&sort=' + encodeURIComponent(storedSort);
+                htmx.ajax('GET', url, { target: '#txn-list-panel', swap: 'innerHTML' });
+            };
+            if (window.htmx) {
+                restoreSort();
+            } else {
+                document.addEventListener('DOMContentLoaded', restoreSort);
+            }
+        }
+    }
+    {{end}}
 })();
 </script>
 {{end}}

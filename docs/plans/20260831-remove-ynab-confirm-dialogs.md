@@ -64,19 +64,19 @@ it for the duration of its in-flight request, closing the gap.
 - Modify: `ui/html/partials/txn-detail-panel.tmpl.html`
 - Modify: `ui/html/partials/txn-rows.tmpl.html`
 
-- [ ] remove `hx-confirm="Send this transaction to YNAB?"` and add
+- [x] remove `hx-confirm="Send this transaction to YNAB?"` and add
       `hx-disabled-elt="this"` on the "Accept & Send to YNAB" button
       (`txn-detail-panel.tmpl.html:63`)
-- [ ] remove `hx-confirm="Skip this transaction?"` and add
+- [x] remove `hx-confirm="Skip this transaction?"` and add
       `hx-disabled-elt="this"` on the "Skip" button in the detail panel
       (`txn-detail-panel.tmpl.html:84`)
-- [ ] remove `hx-confirm="Skip this transaction?"` and add
+- [x] remove `hx-confirm="Skip this transaction?"` and add
       `hx-disabled-elt="this"` on the row-level "Skip" action
       (`txn-rows.tmpl.html:39`)
-- [ ] run `make test` — must pass unchanged (templates are parsed at
+- [x] run `make test` — must pass unchanged (templates are parsed at
       runtime by `NewTemplateCache`, not at build time, so this is the
       real regression guard here, not `go build`)
-- [ ] run `make lint` — must be clean, per CONTRIBUTING.md
+- [x] run `make lint` — must be clean, per CONTRIBUTING.md
 
 ### Task 2: [Final] Verify and wrap up
 - [ ] manually run the app and click "Accept & Send to YNAB" — confirm no

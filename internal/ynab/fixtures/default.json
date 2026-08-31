@@ -1,0 +1,59 @@
+{
+  "budgets": [
+    {
+      "id": "mock-budget-1",
+      "name": "Mock Household Budget",
+      "last_modified_on": "2026-08-01T00:00:00Z",
+      "first_month": "2026-01-01",
+      "last_month": "2026-12-01",
+      "date_format": { "format": "DD/MM/YYYY" },
+      "currency_format": {
+        "iso_code": "USD",
+        "example_format": "123,456.78",
+        "decimal_digits": 2,
+        "decimal_separator": ".",
+        "symbol_first": true,
+        "group_separator": ",",
+        "currency_symbol": "$",
+        "display_symbol": true
+      },
+      "accounts": [
+        { "id": "mock-acc-checking", "name": "Checking", "type": "checking", "on_budget": true, "balance": 500000, "cleared_balance": 500000, "uncleared_balance": 0 },
+        { "id": "mock-acc-savings", "name": "Savings", "type": "savings", "on_budget": true, "balance": 1200000, "cleared_balance": 1200000, "uncleared_balance": 0 }
+      ]
+    }
+  ],
+  "categories": {
+    "mock-budget-1": {
+      "category_groups": [
+        {
+          "id": "mock-cg-1",
+          "name": "Everyday Expenses",
+          "categories": [
+            { "id": "mock-cat-groceries", "category_group_id": "mock-cg-1", "name": "Groceries", "budgeted": 50000, "activity": -12000, "balance": 38000 },
+            { "id": "mock-cat-transport", "category_group_id": "mock-cg-1", "name": "Transport", "budgeted": 20000, "activity": -5000, "balance": 15000 },
+            { "id": "mock-cat-dining", "category_group_id": "mock-cg-1", "name": "Dining Out", "budgeted": 15000, "activity": -8000, "balance": 7000 }
+          ]
+        },
+        {
+          "id": "mock-cg-2",
+          "name": "Bills",
+          "categories": [
+            { "id": "mock-cat-rent", "category_group_id": "mock-cg-2", "name": "Rent", "budgeted": 150000, "activity": -150000, "balance": 0 },
+            { "id": "mock-cat-utilities", "category_group_id": "mock-cg-2", "name": "Utilities", "budgeted": 10000, "activity": -6000, "balance": 4000 }
+          ]
+        }
+      ]
+    }
+  },
+  "payees": {
+    "mock-budget-1": {
+      "payees": [
+        { "id": "mock-payee-grocer", "name": "Local Grocer" },
+        { "id": "mock-payee-landlord", "name": "Landlord" },
+        { "id": "mock-payee-utility-co", "name": "City Utility Co" },
+        { "id": "mock-payee-cafe", "name": "Corner Cafe" }
+      ]
+    }
+  }
+}

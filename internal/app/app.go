@@ -23,6 +23,8 @@ type Config struct {
 	YnabAPI      string        `long:"ynab-api" env:"YNAB_API" description:"YNAB API endpoint" default:"https://api.youneedabudget.com/v1"`
 	YnabToken    string        `long:"ynab-token" env:"YNAB_TOKEN" description:"YNAB API token"`
 	SyncInterval time.Duration `long:"sync-interval" env:"SYNC_INTERVAL" default:"1h" description:"Interval between automatic YNAB syncs"`
+	MockYnab     bool          `long:"mock-ynab" env:"MOCK_YNAB" description:"Use an in-memory mock YNAB client instead of the real YNAB API (for local UI testing)"`
+	MockDataFile string        `long:"mock-data-file" env:"MOCK_DATA_FILE" description:"Path to a JSON fixture overriding the built-in mock YNAB data (only used with --mock-ynab)"`
 	SQLite       sqlite.Config
 }
 
@@ -36,15 +38,26 @@ type App struct {
 
 // New creates a new App with all dependencies wired up.
 func New(cfg Config) (*App, error) {
+	slog.Info("YNAB client mode", "mock", cfg.MockYnab)
+
+	var ynabClient ynab.YnabClient
+	if cfg.MockYnab {
+		fixture, err := ynab.LoadFixture(cfg.MockDataFile)
+		if err != nil {
+			return nil, fmt.Errorf("loading mock YNAB fixture: %w", err)
+		}
+		ynabClient = ynab.NewFakeClient(fixture)
+	} else {
+		httpClient := &http.Client{Timeout: 30 * time.Second}
+		ynabClient = ynab.NewClient(cfg.YnabToken, cfg.YnabAPI, httpClient)
+	}
+
 	slog.Info("connecting to SQLite", "path", cfg.SQLite.Path)
 	db, err := sqlite.New(cfg.SQLite)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to SQLite: %w", err)
 	}
 	slog.Info("connected to SQLite")
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	ynabClient := ynab.NewClient(cfg.YnabToken, cfg.YnabAPI, httpClient)
 
 	ynabStore := db.YnabStore()
 	txnStore := db.TransactionStore()
@@ -65,7 +78,7 @@ func New(cfg Config) (*App, error) {
 	suggestionEngine := txn.NewSuggestionEngine(patternStore)
 	txnProcessor := txn.NewProcessor(parsers, txnStore, ynabStore, ynabClient, suggestionEngine, db.ParserMappingStore())
 
-	templateCache, err := server.NewTemplateCache()
+	templateCache, err := server.NewTemplateCache(cfg.MockYnab)
 	if err != nil {
 		return nil, fmt.Errorf("creating template cache: %w", err)
 	}

@@ -160,6 +160,7 @@
 
             <!-- Main Content -->
             <div class="main-wrapper">
+                {{if mockMode}}<div class="mock-mode-banner">🧪 TEST MODE — YNAB API is mocked, no real data will be synced</div>{{end}}
                 <main class="main-content">{{template "main" .}}</main>
 
                 {{template "footer" .}}

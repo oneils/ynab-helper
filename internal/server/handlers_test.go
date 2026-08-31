@@ -775,7 +775,7 @@ func TestParseSortOrder_InvalidValueDefaultsToDesc(t *testing.T) {
 }
 
 func TestSortToggle_RendersOppositeActionForEachSortState(t *testing.T) {
-	cache, err := NewTemplateCache()
+	cache, err := NewTemplateCache(false)
 	if err != nil {
 		t.Fatalf("NewTemplateCache: %v", err)
 	}
@@ -910,5 +910,39 @@ func TestDetectCSVComma(t *testing.T) {
 				t.Errorf("detectCSVComma() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewTemplateCache_MockModeBanner(t *testing.T) {
+	mockCache, err := NewTemplateCache(true)
+	if err != nil {
+		t.Fatalf("NewTemplateCache(true): %v", err)
+	}
+	ts, ok := mockCache["about.tmpl.html"]
+	if !ok {
+		t.Fatalf("template about.tmpl.html not found in cache")
+	}
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, baseTmpl, nil); err != nil {
+		t.Fatalf("ExecuteTemplate: %v", err)
+	}
+	if !strings.Contains(buf.String(), "TEST MODE") {
+		t.Errorf("expected mock mode banner to be rendered, got: %s", buf.String())
+	}
+
+	normalCache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache(false): %v", err)
+	}
+	ts, ok = normalCache["about.tmpl.html"]
+	if !ok {
+		t.Fatalf("template about.tmpl.html not found in cache")
+	}
+	buf.Reset()
+	if err := ts.ExecuteTemplate(&buf, baseTmpl, nil); err != nil {
+		t.Fatalf("ExecuteTemplate: %v", err)
+	}
+	if strings.Contains(buf.String(), "TEST MODE") {
+		t.Errorf("expected no mock mode banner, got: %s", buf.String())
 	}
 }

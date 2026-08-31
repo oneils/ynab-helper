@@ -195,6 +195,16 @@ body {
     min-width: 0; /* prevents flex blowout */
 }
 
+/* Mock mode banner */
+.mock-mode-banner {
+    flex-shrink: 0;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: #f5a623;
+    color: #1a1a1a;
+    font-weight: 600;
+    text-align: center;
+}
+
 /* Main Content */
 .main-content {
     flex: 1;

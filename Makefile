@@ -10,6 +10,11 @@ all: build
 run:
 	go run -ldflags "-X main.revision=dev" ./cmd/ynab-helper --addr=:5002
 
+## run-mock: run the app locally against an in-memory mock YNAB client (no real YNAB API calls, separate SQLite file)
+.PHONY: run-mock
+run-mock:
+	go run -ldflags "-X main.revision=dev" ./cmd/ynab-helper --addr=:5002 --mock-ynab --sqlite-path=./data/ynab-mock.db
+
 ## build: compile binary for linux/amd64
 .PHONY: build
 build: info

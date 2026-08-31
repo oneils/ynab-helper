@@ -231,7 +231,7 @@ them — it is not a narrow, single-handler change.
 - Modify: `ui/html/pages/import-txns.tmpl.html`
 - Modify: `internal/server/handlers_test.go`
 
-- [ ] add a `{{define "sort-toggle"}}` block at the **top of
+- [x] add a `{{define "sort-toggle"}}` block at the **top of
       `bank-transactions.tmpl.html`**, inside the `{{define "bank-transactions"}}`
       body, above the `{{if .Txns}}` table block — a single
       `<button id="sort-toggle-btn" class="sort-toggle">` whose label/icon/
@@ -249,30 +249,30 @@ them — it is not a narrow, single-handler change.
     would need to stay byte-identical to an in-panel copy, risks rendering
     twice on the full page load, and buys nothing this simpler placement
     doesn't already give for free
-- [ ] add `hx-include="#sort-state"` to all five status-tab buttons in
+- [x] add `hx-include="#sort-state"` to all five status-tab buttons in
       `status-tabs.tmpl.html` (not a hardcoded `&sort=` query value — the
       buttons live outside `#txn-list-panel` and never re-render themselves,
       so their `hx-get` URL can't be updated after a toggle click; including
       the always-current hidden input is the only way they stay correct)
-- [ ] extend the account `<select>`'s `hx-include` in
+- [x] extend the account `<select>`'s `hx-include` in
       `accounts-select.tmpl.html` from `"[name='budget']"` to
       `"[name='budget'], #sort-state"` so switching accounts preserves sort
-- [ ] add `hx-include="#sort-state"` to: the skip button in
+- [x] add `hx-include="#sort-state"` to: the skip button in
       `txn-rows.tmpl.html` (`hx-post .../skip`), and the save/skip actions in
       `txn-detail-panel.tmpl.html` (`hx-post` calls around lines 61, 73, 82)
       — without this, skipping or saving a transaction silently resets the
       visible list to the default order mid-session
-- [ ] add `&sort={{$.Sort}}` to the infinite-scroll sentinel's `hx-get` in
+- [x] add `&sort={{$.Sort}}` to the infinite-scroll sentinel's `hx-get` in
       `txn-rows.tmpl.html:54` so "load more" pages keep the same order as the
       initial page
-- [ ] write a template-rendering test (using `NewTemplateCache()`) asserting
+- [x] write a template-rendering test (using `NewTemplateCache()`) asserting
       the `sort-toggle` button's `hx-get` and visible label differ correctly
       between `TxnListData{Sort: "asc"}` and `TxnListData{Sort: "desc"}`
-- [ ] manually verify (dev server) that: toggling sort re-orders the list;
-      switching status tabs, account, or budget keeps the chosen sort;
-      skipping/saving a transaction keeps the chosen sort; scrolling to load
-      more keeps the chosen sort
-- [ ] run full test suite — must pass before task 4
+- [x] manual test (skipped - not automatable): manually verify (dev server)
+      that toggling sort re-orders the list; switching status tabs, account,
+      or budget keeps the chosen sort; skipping/saving a transaction keeps
+      the chosen sort; scrolling to load more keeps the chosen sort
+- [x] run full test suite — must pass before task 4
 
 ### Task 4: Persist sort choice via localStorage
 

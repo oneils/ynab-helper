@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -769,6 +771,62 @@ func TestParseSortOrder_InvalidValueDefaultsToDesc(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/bank-txns?sort=garbage", nil)
 	if got := parseSortOrder(req); got != "desc" {
 		t.Errorf("expected invalid sort value to default to 'desc', got %q", got)
+	}
+}
+
+func TestSortToggle_RendersOppositeActionForEachSortState(t *testing.T) {
+	cache, err := NewTemplateCache()
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+
+	ts, ok := cache["import-txns.tmpl.html"]
+	if !ok {
+		t.Fatalf("template import-txns.tmpl.html not found in cache")
+	}
+
+	tests := []struct {
+		name        string
+		sort        string
+		wantHxGet   string
+		wantLabel   string
+		unwantLabel string
+	}{
+		{
+			name:        "desc_offers_asc",
+			sort:        "desc",
+			wantHxGet:   "sort=asc",
+			wantLabel:   "Oldest first",
+			unwantLabel: "Newest first",
+		},
+		{
+			name:        "asc_offers_desc",
+			sort:        "asc",
+			wantHxGet:   "sort=desc",
+			wantLabel:   "Newest first",
+			unwantLabel: "Oldest first",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			data := TxnListData{Sort: tt.sort}
+			if err := ts.ExecuteTemplate(&buf, "sort-toggle", data); err != nil {
+				t.Fatalf("ExecuteTemplate: %v", err)
+			}
+
+			out := buf.String()
+			if !strings.Contains(out, tt.wantHxGet) {
+				t.Errorf("sort=%q: expected hx-get to contain %q, got:\n%s", tt.sort, tt.wantHxGet, out)
+			}
+			if !strings.Contains(out, tt.wantLabel) {
+				t.Errorf("sort=%q: expected label %q, got:\n%s", tt.sort, tt.wantLabel, out)
+			}
+			if strings.Contains(out, tt.unwantLabel) {
+				t.Errorf("sort=%q: did not expect label %q, got:\n%s", tt.sort, tt.unwantLabel, out)
+			}
+		})
 	}
 }
 

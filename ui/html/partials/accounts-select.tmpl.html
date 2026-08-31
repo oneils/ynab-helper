@@ -23,7 +23,7 @@
         name="account"
         hx-get="/bank-txns"
         hx-target="#txn-list-panel"
-        hx-include="[name='budget']"
+        hx-include="[name='budget'], #sort-state"
         hx-trigger="change"
     >
         <option value="" {{if eq .Account ""}}selected{{end}}>All Accounts</option>

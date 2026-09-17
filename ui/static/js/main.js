@@ -2,19 +2,22 @@
 // `htmx:xhr:progress` with no equivalent upload-progress signal. The determinate
 // progress bar is downgraded to an indeterminate one, shown for the duration of the
 // request instead of tracking bytes uploaded.
-htmx.on('#upload-bank-txns-form', 'htmx:before:request', function (evt) {
-    if (evt.target.id === 'upload-bank-txns-form') {
-        htmx.find('#progress').removeAttribute('value');
-    }
-});
+var uploadForm = document.querySelector('#upload-bank-txns-form');
+if (uploadForm) {
+    uploadForm.addEventListener('htmx:before:request', function (evt) {
+        if (evt.target.id === 'upload-bank-txns-form') {
+            htmx.find('#progress').removeAttribute('value');
+        }
+    });
 
-// htmx:finally:request (not htmx:after:request) so the indicator is always
-// cleared, including on network errors/aborts where after:request never fires.
-htmx.on('#upload-bank-txns-form', 'htmx:finally:request', function (evt) {
-    if (evt.target.id === 'upload-bank-txns-form') {
-        document.querySelector('.progress-container').style.display = 'none';
-    }
-});
+    // htmx:finally:request (not htmx:after:request) so the indicator is always
+    // cleared, including on network errors/aborts where after:request never fires.
+    uploadForm.addEventListener('htmx:finally:request', function (evt) {
+        if (evt.target.id === 'upload-bank-txns-form') {
+            document.querySelector('.progress-container').style.display = 'none';
+        }
+    });
+}
 
 function updateActiveNav() {
     var path = window.location.pathname;
@@ -23,6 +26,28 @@ function updateActiveNav() {
         var active = href === '/' ? path === '/' : path === href || path.startsWith(href + '/');
         link.classList.toggle('active', active);
     });
+}
+
+function setTransactionStatus(status, button) {
+    var state = document.getElementById('status-state');
+    if (state) state.value = status;
+    document.querySelectorAll('#status-tabs .status-tab').forEach(function (tab) {
+        tab.classList.remove('status-tab--active');
+    });
+    button.classList.add('status-tab--active');
+}
+
+function toggleTransactionSort(button) {
+    var state = document.getElementById('sort-state');
+    if (!state) return;
+
+    var nextSort = state.value === 'desc' ? 'asc' : 'desc';
+    state.value = nextSort;
+    localStorage.setItem('ynab_txn_sort', nextSort);
+    button.classList.toggle('sort-toggle--asc', nextSort === 'asc');
+
+    var label = button.querySelector('span');
+    if (label) label.textContent = nextSort === 'desc' ? 'Oldest first' : 'Newest first';
 }
 
 updateActiveNav();

@@ -1444,9 +1444,8 @@ footer {
 
 /* Action Links/Buttons */
 .txn-actions {
-    display: flex;
-    gap: var(--spacing-sm);
-    align-items: center;
+    text-align: center;
+    white-space: nowrap;
 }
 
 .action-link {
@@ -1563,10 +1562,17 @@ footer {
 }
 
 .filter-card .status-tabs {
-    padding: 0 20px;
+    padding: var(--spacing-sm) 20px;
+    align-items: center;
     border-top: 1px solid var(--bg-border);
     border-bottom: none;
     background: transparent;
+}
+
+.filter-card .status-tabs .sort-toggle {
+    min-height: 32px;
+    padding: var(--spacing-xs) var(--spacing-md);
+    align-self: center;
 }
 
 /* ==================== Split Panel Layout ==================== */
@@ -1574,12 +1580,12 @@ footer {
 .txn-split-layout {
     display: flex;
     align-items: flex-start;
+    gap: var(--spacing-base);
 }
 
 .txn-list-panel {
     flex: 1;
     min-width: 0;
-    border-right: 1px solid var(--bg-border);
 }
 
 #txn-list-panel {
@@ -1730,7 +1736,7 @@ footer {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
-    margin: var(--spacing-base);
+    margin: 0 0 0 auto;
     padding: var(--spacing-xs) var(--spacing-md);
     min-height: 32px;
     font-size: var(--font-size-sm);
@@ -1746,6 +1752,11 @@ footer {
 .sort-toggle svg {
     width: 14px;
     height: 14px;
+    transition: transform var(--transition-fast);
+}
+
+.sort-toggle--asc svg {
+    transform: rotate(180deg);
 }
 
 .sort-toggle:hover:not(:disabled) {
@@ -2010,6 +2021,16 @@ select.detail-select {
     color: var(--text-muted);
     font-size: 0.875rem;
     font-style: italic;
+}
+
+.ss-group-header {
+    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-xs);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    cursor: default;
 }
 
 /* Remember Selections toggle */

@@ -28,7 +28,7 @@ you can process 100+ transactions without page-per-transaction navigation.
 
 - Payee `<select>`: pre-filled if YNAB found a matching payee via `last_used_category_id`
 - Category `<select>`: narrows automatically when payee changes; pre-filled from YNAB data
-- **Remember toggle**: fires `save-inline` automatically whenever both Payee and Category are filled; visually disabled (greyed out) when either field is empty
+- **Remember toggle**: opt-in form field included in the Accept & Send to YNAB request; when checked, a payee/category pattern is recorded only after a successful send; disabled (and force-unchecked) until both Payee and Category are filled
 - Actions:
   - **Accept & Send to YNAB** — posts the transaction to YNAB and marks it Accepted
   - **Save** — persists edits, keeps status as Needs Review
@@ -86,9 +86,11 @@ you can process 100+ transactions without page-per-transaction navigation.
 
 ## Suggestion Engine
 
-Two-stage fallback, no confidence scoring:
+Two-stage fallback with confidence-tiered gating:
 
-1. **Learned patterns** — match bank transaction description against stored patterns; if found, pre-fill payee + category
+1. **Learned patterns** — match bank transaction description against stored patterns (exact fingerprint match, falling back to a token-broadened search), ranked by description similarity and aggregated evidence across matching patterns
 2. **YNAB payee name fallback** — if no pattern match, fuzzy-match the description against YNAB payee names; on hit, pre-fill payee + `last_used_category_id` category and show the "auto" badge
+
+Each suggestion's confidence score is classified into a tier: below `SuggestThreshold` it's hidden entirely, at or above `SuggestThreshold` it's shown as a suggestion, and at or above `PrefillThreshold` it auto-fills the form field.
 
 Unknown transactions (no match in either stage) → empty dropdowns.

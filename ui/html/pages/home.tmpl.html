@@ -37,7 +37,7 @@
                     </svg>
                     Select Budget
                 </label>
-                <select name="budget" id="budget" hx-get="/accounts" hx-include="[name='account']" hx-target="#accounts-select" required>
+                <select name="budget" id="budget" hx-get="/accounts?mode=import" hx-include="[name='account']" hx-target="#accounts-select" hx-swap="outerHTML" required>
                     <option value="">Select...</option>
                     {{range .Budgets}}
                     <option value="{{.ID}}">{{.Name}}</option>
@@ -45,7 +45,7 @@
                 </select>
             </div>
 
-            {{template "accounts-select" .}}
+            {{template "accounts-select-import" .}}
         </div>
 
         <!-- File upload area -->

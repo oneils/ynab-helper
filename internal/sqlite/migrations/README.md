@@ -409,7 +409,26 @@ func downComplexLogic(tx *sql.Tx) error {
 }
 ```
 
-For this project, we use SQL-only migrations for simplicity.
+For this project, we use SQL migrations by default, and only reach for a Go
+migration when the transform needs Go logic that plain SQL can't express
+(e.g. `internal/sqlite/migrations/go/00005_refingerprint_patterns.go`, which
+calls into `internal/txn.Fingerprint()` to recompute and merge colliding
+`payee_patterns` rows).
+
+**Go migrations live in a separate `migrations/go` subpackage**, not directly
+in `internal/sqlite/migrations/`. The `//go:embed migrations/*.sql` directive
+in `sqlite.go` only pulls in `.sql` files — a `.go` file dropped into the
+embedded directory would just be unused source. Go migrations instead
+register themselves via `goose.AddMigrationContext` in an `init()` function,
+keyed off the numeric prefix of their filename (e.g. `00005_...go` registers
+as version 5), and get merged with the SQL-based migrations by version number
+when `goose.Up` runs.
+
+**This registration only happens if something imports the package** — add a
+blank import in `sqlite.go` (`_
+"github.com/oneils/ynab-helper/internal/sqlite/migrations/go"`) for every new
+Go migration package. Forgetting this import means the migration silently
+never runs, in tests or in production, without an explicit error.
 
 ## References
 

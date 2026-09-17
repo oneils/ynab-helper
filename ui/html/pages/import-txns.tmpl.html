@@ -18,7 +18,7 @@
             <select
                 name="budget"
                 id="budget-filter"
-                hx-get="/accounts"
+                hx-get="/accounts?mode=history"
                 hx-target="#accounts-select"
                 hx-swap="outerHTML"
                 required
@@ -30,7 +30,7 @@
             </select>
         </div>
 
-        {{template "accounts-select" .}}
+        {{template "accounts-select-history" .}}
     </div>
 
     {{template "status-tabs" .}}

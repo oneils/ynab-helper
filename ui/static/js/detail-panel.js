@@ -14,8 +14,10 @@
 
     SearchableSelect.prototype._opts = function () {
         return Array.from(this.select.options)
-            .filter(function (o) { return o.value !== ''; })
-            .map(function (o) { return { value: o.value, text: o.textContent.trim() }; });
+            .filter(function (o) { return o.value !== '' || o.dataset.header === 'true'; })
+            .map(function (o) {
+                return { value: o.value, text: o.textContent.trim(), isHeader: o.dataset.header === 'true' };
+            });
     };
 
     SearchableSelect.prototype._selectedText = function () {
@@ -109,13 +111,17 @@
     SearchableSelect.prototype._renderList = function (query) {
         var self = this;
         var q = query.toLowerCase();
+        // Group headers ("Suggested" / "All categories") are non-selectable and
+        // only make sense while browsing the unfiltered list; a search query
+        // flattens the list down to matching options only.
         var opts = this._opts().filter(function (o) {
+            if (o.isHeader) return !q;
             return !q || o.text.toLowerCase().indexOf(q) !== -1;
         });
 
         this.list.innerHTML = '';
 
-        if (opts.length === 0) {
+        if (opts.length === 0 || opts.every(function (o) { return o.isHeader; })) {
             var empty = document.createElement('li');
             empty.className = 'ss-empty';
             empty.textContent = 'No results';
@@ -125,6 +131,14 @@
 
         opts.forEach(function (o) {
             var li = document.createElement('li');
+            if (o.isHeader) {
+                // Not '.ss-option' on purpose: arrow-key nav and _focusListItem
+                // both key off that class, so headers are skipped automatically.
+                li.className = 'ss-group-header';
+                li.textContent = o.text;
+                self.list.appendChild(li);
+                return;
+            }
             li.className = 'ss-option' + (o.value === self.select.value ? ' ss-selected' : '');
             li.textContent = o.text;
             li.tabIndex = -1;
@@ -185,19 +199,49 @@
     var ssPayee = null;
     var ssCategory = null;
     var fullCategoryOptions = [];
-    var latestPayeeId = '';
+    var latestSuggestionRequestId = 0;
 
-    function setCategoryOptions(options) {
+    // Populates the native <select> from one or more option groups. A group
+    // with a `label` gets a disabled, non-selectable header option in front
+    // of it (marked via dataset.header, not value=='', so it survives the
+    // "real" empty-value placeholder filtering in SearchableSelect._opts).
+    function buildCategorySelect(groups) {
         var sel = document.getElementById('detail-category-select');
         if (!sel) return;
         sel.innerHTML = '<option value=""></option>';
-        options.forEach(function (opt) {
-            var el = document.createElement('option');
-            el.value = opt.value;
-            el.textContent = opt.text;
-            sel.appendChild(el);
+        groups.forEach(function (group) {
+            if (group.label) {
+                var header = document.createElement('option');
+                header.value = '';
+                header.disabled = true;
+                header.dataset.header = 'true';
+                header.textContent = group.label;
+                sel.appendChild(header);
+            }
+            group.options.forEach(function (opt) {
+                var el = document.createElement('option');
+                el.value = opt.value;
+                el.textContent = opt.text;
+                sel.appendChild(el);
+            });
         });
         if (ssCategory) ssCategory.refresh();
+    }
+
+    function setCategoryOptions(options) {
+        buildCategorySelect([{ options: options }]);
+    }
+
+    function setCategorySuggestedOptions(suggestedOptions) {
+        var suggestedValues = {};
+        suggestedOptions.forEach(function (opt) { suggestedValues[opt.value] = true; });
+        var remainingOptions = fullCategoryOptions.filter(function (opt) {
+            return !suggestedValues[opt.value];
+        });
+        buildCategorySelect([
+            { label: 'Suggested', options: suggestedOptions },
+            { label: 'All categories', options: remainingOptions }
+        ]);
     }
 
     function restoreFullCategoryList() {
@@ -211,35 +255,46 @@
         var description = form.dataset.description || '';
         if (!budgetId || !payeeId) return;
 
-        latestPayeeId = payeeId;
+        var requestId = ++latestSuggestionRequestId;
 
-        var url = '/api/category-suggestions?budget_id=' + encodeURIComponent(budgetId) +
+        var url = '/bank-txns/api/category-suggestions?budget_id=' + encodeURIComponent(budgetId) +
             '&description=' + encodeURIComponent(description) +
             '&payee_id=' + encodeURIComponent(payeeId);
 
         fetch(url)
             .then(function (r) { return r.json(); })
             .then(function (data) {
-                if (latestPayeeId !== payeeId) return;
+                if (latestSuggestionRequestId !== requestId) return;
                 var suggestions = (data && data.suggestions) || [];
-                if (suggestions.length === 0) { restoreFullCategoryList(); return; }
+                if (suggestions.length === 0) { restoreFullCategoryList(); updateRememberToggleState(); return; }
                 var opts = suggestions.map(function (s) {
                     return { value: s.category_id, text: s.category_name };
                 });
-                setCategoryOptions(opts);
+                setCategorySuggestedOptions(opts);
                 if (suggestions.length === 1 && ssCategory) {
                     ssCategory.setValue(suggestions[0].category_id);
                 }
+                updateRememberToggleState();
             })
-            .catch(function () { restoreFullCategoryList(); });
+            .catch(function () {
+                if (latestSuggestionRequestId !== requestId) return;
+                restoreFullCategoryList();
+                updateRememberToggleState();
+            });
     }
 
     function updateRememberToggleState() {
         var row = document.querySelector('.remember-toggle-row');
         if (!row) return;
+        var checkbox = row.querySelector('.remember-checkbox');
         var payeeSel = document.getElementById('detail-payee-select');
         var catSel = document.getElementById('detail-category-select');
-        row.classList.toggle('disabled', !(payeeSel && payeeSel.value && catSel && catSel.value));
+        var ready = !!(payeeSel && payeeSel.value && catSel && catSel.value);
+        row.classList.toggle('disabled', !ready);
+        if (checkbox) {
+            checkbox.disabled = !ready;
+            if (!ready) checkbox.checked = false;
+        }
     }
 
     function onPayeeChange() {
@@ -248,7 +303,7 @@
         if (payeeId) {
             fetchCategorySuggestions(payeeId);
         } else {
-            latestPayeeId = '';
+            latestSuggestionRequestId++;
             restoreFullCategoryList();
             var catSel = document.getElementById('detail-category-select');
             if (catSel) catSel.value = '';
@@ -271,7 +326,7 @@
         } else {
             fullCategoryOptions = [];
         }
-        latestPayeeId = '';
+        latestSuggestionRequestId++;
 
         if (payeeSel) {
             ssPayee = new SearchableSelect(payeeSel, 'Select payee');
@@ -285,19 +340,6 @@
 
         updateRememberToggleState();
     }
-
-    // Block remember toggle when no payee/category is set.
-    function guardRememberToggle(e) {
-        if (!e.target || !e.target.classList.contains('remember-checkbox')) return;
-        var payeeSel = document.getElementById('detail-payee-select');
-        var catSel = document.getElementById('detail-category-select');
-        if (!payeeSel || !payeeSel.value || !catSel || !catSel.value) {
-            e.preventDefault();
-            e.target.checked = false;
-        }
-    }
-    // htmx:before:request is the v4 event name (was htmx:beforeRequest in 1.x).
-    document.body.addEventListener('htmx:before:request', guardRememberToggle);
 
     // Registered once outside init() so repeated HTMX panel swaps don't stack listeners.
     function reinitOnDetailPanelSettle(e) {

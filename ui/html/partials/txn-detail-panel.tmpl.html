@@ -57,7 +57,7 @@
         <button type="button"
             class="button-primary"
             hx-post="/ynab-add-txn?status={{.ActiveStatus}}"
-            hx-include="#detail-form, #sort-state"
+            hx-include="#detail-form, .remember-checkbox, #sort-state"
             hx-target="#txn-list-panel"
             hx-swap="innerHTML"
             hx-disabled-elt="this"
@@ -68,14 +68,12 @@
         <label class="remember-toggle-row">
             <input type="checkbox"
                 class="remember-checkbox"
-                hx-post="/bank-txns/{{.Txn.ID}}/save-inline?status={{.ActiveStatus}}"
-                hx-include="#detail-form, #sort-state"
-                hx-target="#txn-list-panel"
-                hx-swap="innerHTML"
-                hx-trigger="change[this.checked]">
+                name="remember_similar"
+                value="true">
             <span class="toggle-track"></span>
-            <span class="toggle-label-text">Remember Selections</span>
+            <span class="toggle-label-text">Use this payee and category for similar transactions</span>
         </label>
+        <p class="remember-toggle-hint">Future transactions with a similar bank description will use these values as suggestions.</p>
         <button type="button"
             class="button danger"
             hx-post="/bank-txns/{{.Txn.ID}}/skip?accId={{.Txn.Account.ID}}&status={{.ActiveStatus}}"

@@ -237,7 +237,12 @@ func (s *Server) accountsHandler(w http.ResponseWriter, r *http.Request) {
 		Account: accountID,
 	}
 
-	s.render(w, http.StatusOK, "import-txns.tmpl.html", "accounts-select", data)
+	templateName := "accounts-select-import"
+	if r.URL.Query().Get("mode") == "history" {
+		templateName = "accounts-select-history"
+	}
+
+	s.render(w, http.StatusOK, "import-txns.tmpl.html", templateName, data)
 }
 
 // TxnListRow is a view-model for transaction list rows, enriched with suggestion data.
@@ -477,7 +482,7 @@ func enrichTransactionList(
 
 		payeeSuggestions, err := getSuggestions(ctx, budget.ID, t.Description)
 		var sugPayeeID string
-		if err == nil && len(payeeSuggestions) > 0 {
+		if err == nil && len(payeeSuggestions) > 0 && txn.ClassifyConfidence(payeeSuggestions[0].Confidence) == txn.TierPrefill {
 			sugPayeeID = payeeSuggestions[0].PayeeID
 			rows[i].SugPayee = payeeSuggestions[0].PayeeName
 			rows[i].AutoFilled = true
@@ -496,7 +501,7 @@ func enrichTransactionList(
 		}
 
 		catSuggestions, err := getCategorySuggestions(ctx, budget.ID, t.Description, sugPayeeID)
-		if err == nil && len(catSuggestions) > 0 {
+		if err == nil && len(catSuggestions) > 0 && txn.ClassifyConfidence(catSuggestions[0].Confidence) == txn.TierPrefill {
 			rows[i].SugCategory = catSuggestions[0].CategoryName
 			rows[i].AutoFilled = true
 		}
@@ -549,7 +554,7 @@ func (s *Server) detailBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("failed to get payee suggestions for detail", "txnID", txnID, "error", err)
 	}
 	var patternPayeeID string
-	if len(payeeSugs) > 0 {
+	if len(payeeSugs) > 0 && txn.ClassifyConfidence(payeeSugs[0].Confidence) == txn.TierPrefill {
 		patternPayeeID = payeeSugs[0].PayeeID
 	}
 
@@ -558,7 +563,7 @@ func (s *Server) detailBankTxnHandler(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("failed to get category suggestions for detail", "txnID", txnID, "error", catErr)
 	}
 	var patternCatID string
-	if len(catSugs) > 0 {
+	if len(catSugs) > 0 && txn.ClassifyConfidence(catSugs[0].Confidence) == txn.TierPrefill {
 		patternCatID = catSugs[0].CategoryID
 	}
 
@@ -726,7 +731,9 @@ func (s *Server) uploadTxnToYnabHandler(w http.ResponseWriter, r *http.Request) 
 		slog.Error("error updating payee last category", "error", err)
 	}
 
-	if form.PayeeID != "" {
+	remember := r.PostForm.Get("remember_similar") == "true"
+
+	if remember && form.PayeeID != "" && form.CategoryID != "" {
 		transaction, fetchErr := s.TxnProcessor.FetchByID(r.Context(), form.TxnID)
 		if fetchErr != nil {
 			slog.Error("error fetching transaction for pattern recording", "error", fetchErr)
@@ -1222,138 +1229,6 @@ func (s *Server) cancelPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Inline editing handlers
-
-func (s *Server) saveInlineTxnHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	txnID := chi.URLParam(r, "id")
-
-	form := txn.SaveForm{
-		TxnID:      txnID,
-		BudgetID:   r.PostForm.Get("budget"),
-		AccountID:  r.PostForm.Get("account"),
-		PayeeID:    r.PostForm.Get("payee"),
-		CategoryID: r.PostForm.Get("category"),
-		Memo:       r.PostForm.Get("memo"),
-		Amount:     r.PostForm.Get("amount"),
-		TxnDate:    r.PostForm.Get("txnDate"),
-	}
-
-	if form.PayeeID == "" || form.CategoryID == "" {
-		w.Header().Set("HX-Trigger", `{"showToast": {"message": "Select both a payee and category to remember selections", "type": "warning"}}`)
-		w.Header().Set("HX-Reswap", "none")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	// Update payee's last category for future suggestions
-	if form.PayeeID != "" && form.CategoryID != "" {
-		if err := s.Syncer.UpdatePayeeLastCategory(r.Context(), form.PayeeID, form.CategoryID); err != nil {
-			slog.Error("error updating payee last category", "error", err)
-			// Don't fail the request, just log the error
-		}
-	}
-
-	// Fetch the updated transaction
-	transaction, err := s.TxnProcessor.FetchByID(r.Context(), txnID)
-	if err != nil {
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	// Record pattern for future smart suggestions
-	if form.PayeeID != "" {
-		// Fetch payees to get the payee name for pattern recording
-		payees, err := s.Syncer.FetchPayeesByBudget(r.Context(), form.BudgetID)
-		if err != nil {
-			slog.Error("error fetching payees for pattern recording", "error", err)
-		} else {
-			// Look up payee name
-			var payeeName string
-			for _, p := range payees {
-				if p.ID == form.PayeeID {
-					payeeName = p.Name
-					break
-				}
-			}
-
-			// Look up category name if provided
-			var categoryName string
-			if form.CategoryID != "" {
-				categories, err := s.Syncer.FetchCategoriesByBudget(r.Context(), form.BudgetID)
-				if err != nil {
-					slog.Error("error fetching categories for pattern recording", "error", err)
-				} else {
-					for _, c := range categories {
-						if c.ID == form.CategoryID {
-							categoryName = c.Name
-							break
-						}
-					}
-				}
-			}
-
-			// Record the pattern
-			if err := s.TxnProcessor.RecordPattern(r.Context(), form.BudgetID, transaction.Description, form.PayeeID, payeeName, form.CategoryID, categoryName, transaction.TxnTime); err != nil {
-				slog.Error("error recording payee pattern", "error", err)
-			}
-		}
-	}
-
-	sort := parseSortOrder(r)
-
-	// Fetch updated transaction list for the account
-	txns, err := s.TxnProcessor.Fetch(r.Context(), txn.ProcessParams{
-		BudgetID:  form.BudgetID,
-		AccountID: form.AccountID,
-		Sort:      sort,
-	})
-	if err != nil {
-		slog.Error("failed to fetch transactions after save", "error", err)
-		s.render(w, http.StatusOK, "error.tmpl.html", errorTmpl, err.Error())
-		return
-	}
-
-	statusCounts, err := s.TxnProcessor.CountByStatus(r.Context(), form.AccountID)
-	if err != nil {
-		slog.Error("failed to count transactions by status", "error", err)
-		statusCounts = make(map[txn.TransactionStatus]int)
-	}
-	statusCountsStr := make(map[string]int, len(statusCounts))
-	for k, v := range statusCounts {
-		statusCountsStr[string(k)] = v
-	}
-
-	// Add success message header for toast notification
-	w.Header().Set("HX-Trigger", `{"showToast": {"message": "Transaction saved successfully", "type": "success"}}`)
-
-	responseData := TxnListData{
-		Txns: enrichTransactionList(r.Context(), txns,
-			s.Syncer.FindBudgetByAccID,
-			func(ctx context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
-				return s.TxnProcessor.GetSmartSuggestions(ctx, budgetID, description)
-			},
-			func(ctx context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
-				return s.TxnProcessor.GetCategorySuggestions(ctx, budgetID, description, payeeID)
-			},
-			s.Syncer.FetchPayeesByBudget,
-			s.TxnProcessor.SuggestPayee,
-		),
-		PageMeta:     PageMeta{},
-		Budget:       form.BudgetID,
-		Account:      form.AccountID,
-		ActiveStatus: r.URL.Query().Get("status"),
-		StatusCounts: statusCountsStr,
-		Sort:         sort,
-	}
-
-	s.render(w, http.StatusOK, "import-txns.tmpl.html", "bank-transactions", responseData)
-}
-
 // Bulk operations handlers
 
 func (s *Server) bulkSkipTxnsHandler(w http.ResponseWriter, r *http.Request) {
@@ -1493,9 +1368,16 @@ func (s *Server) payeeSuggestionsHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	filtered := make([]txn.PayeeSuggestion, 0, len(suggestions))
+	for _, sug := range suggestions {
+		if txn.ClassifyConfidence(sug.Confidence) != txn.TierHide {
+			filtered = append(filtered, sug)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"suggestions": suggestions,
+		"suggestions": filtered,
 	}); err != nil {
 		slog.Error("failed to encode suggestions response", "error", err)
 	}
@@ -1518,9 +1400,16 @@ func (s *Server) categorySuggestionsHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	filtered := make([]txn.CategorySuggestion, 0, len(suggestions))
+	for _, sug := range suggestions {
+		if txn.ClassifyConfidence(sug.Confidence) != txn.TierHide {
+			filtered = append(filtered, sug)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"suggestions": suggestions,
+		"suggestions": filtered,
 	}); err != nil {
 		slog.Error("failed to encode category suggestions response", "error", err)
 	}

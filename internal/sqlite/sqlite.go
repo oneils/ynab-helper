@@ -12,6 +12,8 @@ import (
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
+
+	_ "github.com/oneils/ynab-helper/internal/sqlite/migrations/go"
 )
 
 //go:embed migrations/*.sql

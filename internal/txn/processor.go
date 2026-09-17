@@ -335,7 +335,7 @@ func (p *Processor) RecordPattern(ctx context.Context, budgetID, description, pa
 	// Create and upsert pattern
 	pattern := PayeePattern{
 		BudgetID:              budgetID,
-		NormalizedDescription: normalize(description),
+		NormalizedDescription: Fingerprint(description),
 		PayeeID:               payeeID,
 		PayeeName:             payeeName,
 		CategoryID:            categoryID,

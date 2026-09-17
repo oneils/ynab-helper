@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -45,7 +46,7 @@ func TestEnrichTransactionList_PayeeSuggestion(t *testing.T) {
 
 	getSuggestions := func(_ context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
 		return []txn.PayeeSuggestion{
-			{PayeeID: "p1", PayeeName: "Biedronka"},
+			{PayeeID: "p1", PayeeName: "Biedronka", Confidence: 90},
 		}, nil
 	}
 
@@ -89,7 +90,7 @@ func TestEnrichTransactionList_CategorySuggestion(t *testing.T) {
 
 	getCategorySuggestions := func(_ context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 		return []txn.CategorySuggestion{
-			{CategoryID: "cat1", CategoryName: "Groceries"},
+			{CategoryID: "cat1", CategoryName: "Groceries", Confidence: 90},
 		}, nil
 	}
 
@@ -122,13 +123,13 @@ func TestEnrichTransactionList_BothSuggestions(t *testing.T) {
 
 	getSuggestions := func(_ context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
 		return []txn.PayeeSuggestion{
-			{PayeeID: "p1", PayeeName: "Zabka"},
+			{PayeeID: "p1", PayeeName: "Zabka", Confidence: 90},
 		}, nil
 	}
 
 	getCategorySuggestions := func(_ context.Context, budgetID, description, payeeID string) ([]txn.CategorySuggestion, error) {
 		return []txn.CategorySuggestion{
-			{CategoryID: "cat1", CategoryName: "Food"},
+			{CategoryID: "cat1", CategoryName: "Food", Confidence: 90},
 		}, nil
 	}
 
@@ -264,7 +265,7 @@ func TestEnrichTransactionList_BudgetCaching(t *testing.T) {
 
 	getSuggestions := func(_ context.Context, budgetID, description string) ([]txn.PayeeSuggestion, error) {
 		return []txn.PayeeSuggestion{
-			{PayeeID: "p1", PayeeName: "Payee-" + description},
+			{PayeeID: "p1", PayeeName: "Payee-" + description, Confidence: 90},
 		}, nil
 	}
 
@@ -460,7 +461,7 @@ func TestParserMappingRoutesExist(t *testing.T) {
 	}
 }
 
-func TestDetailRoute_SaveInlineStillExists(t *testing.T) {
+func TestDetailRoute_SaveInlineRemoved(t *testing.T) {
 	s := &Server{}
 
 	var found bool
@@ -471,8 +472,8 @@ func TestDetailRoute_SaveInlineStillExists(t *testing.T) {
 		return nil
 	})
 
-	if !found {
-		t.Error("expected POST /bank-txns/{id}/save-inline route to still exist")
+	if found {
+		t.Error("expected POST /bank-txns/{id}/save-inline route to no longer exist")
 	}
 }
 
@@ -509,6 +510,39 @@ func TestEnrichTransactionList_FallbackPayeeMatch(t *testing.T) {
 	}
 	if !rows[0].AutoFilled {
 		t.Error("expected AutoFilled to be true when fallback payee found")
+	}
+}
+
+func TestEnrichTransactionList_LowConfidenceSuggestion_FallsBackToPayeeMatch(t *testing.T) {
+	ctx := context.Background()
+
+	txns := []txn.Transaction{
+		{ID: "1", Description: "Purchase at BIEDRONKA", Account: txn.BankAccount{ID: "acc1"}},
+	}
+
+	budgetByAccID := func(_ context.Context, _ string) (ynab.Budget, error) {
+		return ynab.Budget{ID: "budget1"}, nil
+	}
+	getSuggestions := func(_ context.Context, _, _ string) ([]txn.PayeeSuggestion, error) {
+		return []txn.PayeeSuggestion{{PayeeID: "pattern-p", PayeeName: "PatternPayee", Confidence: 50}}, nil
+	}
+	getCategorySuggestions := func(_ context.Context, _, _, _ string) ([]txn.CategorySuggestion, error) {
+		return nil, nil
+	}
+	getPayeesByBudget := func(_ context.Context, _ string) ([]ynab.Payee, error) {
+		return []ynab.Payee{{ID: "p1", Name: "Biedronka"}}, nil
+	}
+	suggestPayee := func(_ txn.Transaction, _ []ynab.Payee) ynab.Payee {
+		return ynab.Payee{ID: "p1", Name: "Biedronka"}
+	}
+
+	rows := enrichTransactionList(ctx, txns, budgetByAccID, getSuggestions, getCategorySuggestions, getPayeesByBudget, suggestPayee)
+
+	if rows[0].SugPayee != "Biedronka" {
+		t.Errorf("expected fallback payee 'Biedronka' when suggestion below PrefillThreshold, got '%s'", rows[0].SugPayee)
+	}
+	if !rows[0].AutoFilled {
+		t.Error("expected AutoFilled true via fallback match")
 	}
 }
 
@@ -556,7 +590,7 @@ func TestEnrichTransactionList_FallbackSkippedWhenPatternExists(t *testing.T) {
 		return ynab.Budget{ID: "budget1"}, nil
 	}
 	getSuggestions := func(_ context.Context, _, _ string) ([]txn.PayeeSuggestion, error) {
-		return []txn.PayeeSuggestion{{PayeeID: "pattern-p", PayeeName: "PatternPayee"}}, nil
+		return []txn.PayeeSuggestion{{PayeeID: "pattern-p", PayeeName: "PatternPayee", Confidence: 90}}, nil
 	}
 	getCategorySuggestions := func(_ context.Context, _, _, _ string) ([]txn.CategorySuggestion, error) {
 		return nil, nil
@@ -791,21 +825,18 @@ func TestSortToggle_RendersOppositeActionForEachSortState(t *testing.T) {
 	tests := []struct {
 		name        string
 		sort        string
-		wantHxGet   string
 		wantLabel   string
 		unwantLabel string
 	}{
 		{
 			name:        "desc_offers_asc",
 			sort:        "desc",
-			wantHxGet:   "sort=asc",
 			wantLabel:   "Oldest first",
 			unwantLabel: "Newest first",
 		},
 		{
 			name:        "asc_offers_desc",
 			sort:        "asc",
-			wantHxGet:   "sort=desc",
 			wantLabel:   "Newest first",
 			unwantLabel: "Oldest first",
 		},
@@ -820,8 +851,8 @@ func TestSortToggle_RendersOppositeActionForEachSortState(t *testing.T) {
 			}
 
 			out := buf.String()
-			if !strings.Contains(out, tt.wantHxGet) {
-				t.Errorf("sort=%q: expected hx-get to contain %q, got:\n%s", tt.sort, tt.wantHxGet, out)
+			if !strings.Contains(out, `hx-get="/bank-txns"`) || !strings.Contains(out, `onclick="toggleTransactionSort(this)"`) {
+				t.Errorf("sort=%q: expected dynamic sort control wiring, got:\n%s", tt.sort, out)
 			}
 			if !strings.Contains(out, tt.wantLabel) {
 				t.Errorf("sort=%q: expected label %q, got:\n%s", tt.sort, tt.wantLabel, out)
@@ -908,6 +939,47 @@ func TestTxnDetailPanel_RendersV4HxOnAttribute(t *testing.T) {
 	}
 }
 
+func TestTxnDetailPanel_RemberCheckboxIsOptInFormField(t *testing.T) {
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+
+	ts, ok := cache["import-txns.tmpl.html"]
+	if !ok {
+		t.Fatalf("template import-txns.tmpl.html not found in cache")
+	}
+
+	data := struct {
+		Txn             txn.Transaction
+		BudgetID        string
+		Payees          []ynab.Payee
+		Categories      []ynab.Category
+		SugPayeeID      string
+		SugPayeeName    string
+		SugCategoryID   string
+		SugCategoryName string
+		ActiveStatus    string
+	}{
+		Txn:          txn.Transaction{ID: "1", Account: txn.BankAccount{ID: "acc1"}},
+		BudgetID:     "budget1",
+		ActiveStatus: "DRAFT",
+	}
+
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, "txn-detail-panel", data); err != nil {
+		t.Fatalf("ExecuteTemplate: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, `name="remember_similar"`) {
+		t.Errorf("expected checkbox to carry name=\"remember_similar\", got:\n%s", out)
+	}
+	if strings.Contains(out, "/save-inline") {
+		t.Errorf("expected no reference to /save-inline, got:\n%s", out)
+	}
+}
+
 // --- v4 htmx response header tests (Task 3) ---
 // Task 1 confirmed HX-Trigger/HX-Refresh/HX-Redirect/HX-Reswap are unchanged
 // in name and semantics under htmx 4. These tests close the pre-migration
@@ -937,25 +1009,6 @@ func TestSaveParserMappingHandler_SetsShowToastTrigger(t *testing.T) {
 	want := `{"showToast": {"message": "Parser mapping saved", "type": "success"}}`
 	if got != want {
 		t.Errorf("HX-Trigger = %q, want %q", got, want)
-	}
-}
-
-func TestSaveInlineTxnHandler_MissingPayeeOrCategory_SetsWarningTriggerAndReswapNone(t *testing.T) {
-	s := &Server{}
-
-	form := url.Values{"budget": {"b1"}, "account": {"acc1"}}
-	req := httptest.NewRequest(http.MethodPost, "/bank-txns/txn1/save-inline", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-
-	s.routes().ServeHTTP(rec, req)
-
-	wantTrigger := `{"showToast": {"message": "Select both a payee and category to remember selections", "type": "warning"}}`
-	if got := rec.Header().Get("HX-Trigger"); got != wantTrigger {
-		t.Errorf("HX-Trigger = %q, want %q", got, wantTrigger)
-	}
-	if got := rec.Header().Get("HX-Reswap"); got != "none" {
-		t.Errorf("HX-Reswap = %q, want %q", got, "none")
 	}
 }
 
@@ -1137,6 +1190,72 @@ func TestIndex_RendersHtmxV4ScriptTag(t *testing.T) {
 	}
 }
 
+func TestAccountSelect_ImportAndHistoryBehaviorsAreSeparated(t *testing.T) {
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+
+	data := struct {
+		Accs    []ynab.Account
+		Account string
+	}{
+		Accs: []ynab.Account{{ID: "acc-1", Name: "Checking"}},
+	}
+
+	ts := cache["home.tmpl.html"]
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, "accounts-select-import", data); err != nil {
+		t.Fatalf("render import account select: %v", err)
+	}
+	importHTML := buf.String()
+	if !strings.Contains(importHTML, `required`) {
+		t.Errorf("expected import account select to be required, got:\n%s", importHTML)
+	}
+	if !strings.Contains(importHTML, `Select account...`) {
+		t.Errorf("expected import-specific placeholder, got:\n%s", importHTML)
+	}
+	if strings.Contains(importHTML, `hx-get="/bank-txns"`) || strings.Contains(importHTML, `txn-list-panel`) {
+		t.Errorf("import account select must not load transaction history, got:\n%s", importHTML)
+	}
+
+	buf.Reset()
+	ts = cache["import-txns.tmpl.html"]
+	if err := ts.ExecuteTemplate(&buf, "accounts-select-history", data); err != nil {
+		t.Fatalf("render history account select: %v", err)
+	}
+	historyHTML := buf.String()
+	if !strings.Contains(historyHTML, `hx-get="/bank-txns"`) || !strings.Contains(historyHTML, `hx-target="#txn-list-panel"`) {
+		t.Errorf("expected history account select to refresh the transaction list, got:\n%s", historyHTML)
+	}
+}
+
+func TestHomeBudgetSwapReplacesAccountSelect(t *testing.T) {
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+	ts := cache["home.tmpl.html"]
+
+	data := struct {
+		Budgets []ynab.Budget
+		Accs    []ynab.Account
+		Txns    []TxnListRow
+		Account string
+	}{
+		Budgets: []ynab.Budget{{ID: "budget-1", Name: "Budget"}},
+	}
+
+	var buf bytes.Buffer
+	if err := ts.ExecuteTemplate(&buf, baseTmpl, data); err != nil {
+		t.Fatalf("render home: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `hx-get="/accounts?mode=import"`) || !strings.Contains(out, `hx-swap="outerHTML"`) {
+		t.Errorf("expected budget selection to replace the account selector in import mode, got:\n%s", out)
+	}
+}
+
 func TestNewTemplateCache_MockModeBanner(t *testing.T) {
 	mockCache, err := NewTemplateCache(true)
 	if err != nil {
@@ -1168,5 +1287,283 @@ func TestNewTemplateCache_MockModeBanner(t *testing.T) {
 	}
 	if strings.Contains(buf.String(), "TEST MODE") {
 		t.Errorf("expected no mock mode banner, got: %s", buf.String())
+	}
+}
+
+// --- Task 1a: remember_similar opt-in gating on uploadTxnToYnabHandler ---
+
+type fakeUploadTxnStore struct {
+	transactions []txn.Transaction
+}
+
+func (f *fakeUploadTxnStore) InsertTransaction(context.Context, txn.Transaction) error { return nil }
+func (f *fakeUploadTxnStore) FetchTransactionsByAccount(context.Context, string, string, string) ([]txn.Transaction, error) {
+	return f.transactions, nil
+}
+func (f *fakeUploadTxnStore) FindTransactionByID(_ context.Context, id string) (txn.Transaction, error) {
+	for _, t := range f.transactions {
+		if t.ID == id {
+			return t, nil
+		}
+	}
+	return txn.Transaction{}, errors.New("not found")
+}
+func (f *fakeUploadTxnStore) UpdateTransactionStatus(context.Context, string, txn.TransactionStatus) error {
+	return nil
+}
+func (f *fakeUploadTxnStore) CountByStatus(context.Context, string) (map[txn.TransactionStatus]int, error) {
+	return map[txn.TransactionStatus]int{}, nil
+}
+
+type fakeBudgetFinder struct{}
+
+func (fakeBudgetFinder) FindBudgetByAccountID(context.Context, string) (ynab.Budget, error) {
+	return ynab.Budget{}, nil
+}
+
+type fakeUploadBudgetStorer struct{}
+
+func (fakeUploadBudgetStorer) UpsertBudget(context.Context, ynab.Budget) error { return nil }
+func (fakeUploadBudgetStorer) FetchAllBudgets(context.Context) ([]ynab.Budget, error) {
+	return nil, nil
+}
+func (fakeUploadBudgetStorer) FindBudgetByID(context.Context, string) (ynab.Budget, error) {
+	return ynab.Budget{}, nil
+}
+func (fakeUploadBudgetStorer) FindBudgetByAccountID(context.Context, string) (ynab.Budget, error) {
+	return ynab.Budget{ID: "budget1"}, nil
+}
+
+type fakeUploader struct {
+	err error
+}
+
+func (f *fakeUploader) Upload(ynab.TxnReq) error { return f.err }
+
+type fakeCategoryStorer struct{}
+
+func (fakeCategoryStorer) UpsertCategoryGroup(context.Context, ynab.CategoryGroup) error { return nil }
+func (fakeCategoryStorer) FetchCategoriesByBudget(context.Context, string) ([]ynab.CategoryGroup, error) {
+	return []ynab.CategoryGroup{{Categories: []ynab.Category{{ID: "cat1", Name: "Groceries"}}}}, nil
+}
+
+type fakePayeeStorer struct{}
+
+func (fakePayeeStorer) UpsertPayee(context.Context, ynab.Payee) error { return nil }
+func (fakePayeeStorer) FetchPayeesByBudget(context.Context, string) ([]ynab.Payee, error) {
+	return []ynab.Payee{{ID: "payee1", Name: "Lidl"}}, nil
+}
+func (fakePayeeStorer) UpdatePayeeLastCategory(context.Context, string, string) error { return nil }
+
+type fakeUploadPatternStore struct {
+	upsertCalls int
+}
+
+func (f *fakeUploadPatternStore) FindPatternsByDescription(context.Context, string, string, int) ([]txn.PayeePattern, error) {
+	return nil, nil
+}
+func (f *fakeUploadPatternStore) FindPatternsByPayeeID(context.Context, string, string, int) ([]txn.PayeePattern, error) {
+	return nil, nil
+}
+func (f *fakeUploadPatternStore) UpsertPattern(context.Context, txn.PayeePattern) error {
+	f.upsertCalls++
+	return nil
+}
+
+func newUploadTestServer(uploadErr error) (*Server, *fakeUploadPatternStore) {
+	patternStore := &fakeUploadPatternStore{}
+	suggestionEngine := txn.NewSuggestionEngine(patternStore)
+	txnStore := &fakeUploadTxnStore{
+		transactions: []txn.Transaction{
+			{ID: "txn1", Description: "LIDL WARSZAWA", Account: txn.BankAccount{ID: "acc1"}},
+		},
+	}
+	processor := txn.NewProcessor(nil, txnStore, fakeBudgetFinder{}, &fakeUploader{err: uploadErr}, suggestionEngine, nil)
+	syncer := ynab.NewSyncer(nil, fakeUploadBudgetStorer{}, nil, fakeCategoryStorer{}, fakePayeeStorer{}, nil)
+
+	s := &Server{
+		Syncer:       syncer,
+		TxnProcessor: processor,
+	}
+	return s, patternStore
+}
+
+func uploadTxnRequest(remember string) *http.Request {
+	form := url.Values{
+		"txnID":    {"txn1"},
+		"budget":   {"budget1"},
+		"account":  {"acc1"},
+		"payee":    {"payee1"},
+		"category": {"cat1"},
+		"amount":   {"10.00"},
+		"txnDate":  {"2026-09-16"},
+	}
+	if remember != "" {
+		form.Set("remember_similar", remember)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/ynab-add-txn", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return req
+}
+
+func TestUploadTxnToYnabHandler_RememberTrue_RecordsPatternOnce(t *testing.T) {
+	s, patternStore := newUploadTestServer(nil)
+	rec := httptest.NewRecorder()
+
+	s.uploadTxnToYnabHandler(rec, uploadTxnRequest("true"))
+
+	if patternStore.upsertCalls != 1 {
+		t.Errorf("expected UpsertPattern called exactly once, got %d", patternStore.upsertCalls)
+	}
+}
+
+func TestUploadTxnToYnabHandler_RememberAbsent_DoesNotRecordPattern(t *testing.T) {
+	s, patternStore := newUploadTestServer(nil)
+	rec := httptest.NewRecorder()
+
+	s.uploadTxnToYnabHandler(rec, uploadTxnRequest(""))
+
+	if patternStore.upsertCalls != 0 {
+		t.Errorf("expected UpsertPattern not called, got %d calls", patternStore.upsertCalls)
+	}
+}
+
+func TestUploadTxnToYnabHandler_RememberFalse_DoesNotRecordPattern(t *testing.T) {
+	s, patternStore := newUploadTestServer(nil)
+	rec := httptest.NewRecorder()
+
+	s.uploadTxnToYnabHandler(rec, uploadTxnRequest("false"))
+
+	if patternStore.upsertCalls != 0 {
+		t.Errorf("expected UpsertPattern not called, got %d calls", patternStore.upsertCalls)
+	}
+}
+
+func TestUploadTxnToYnabHandler_YnabUploadFails_DoesNotRecordPatternEvenWithRemember(t *testing.T) {
+	s, patternStore := newUploadTestServer(errors.New("ynab down"))
+	rec := httptest.NewRecorder()
+
+	s.uploadTxnToYnabHandler(rec, uploadTxnRequest("true"))
+
+	if patternStore.upsertCalls != 0 {
+		t.Errorf("expected UpsertPattern not called on failed upload, got %d calls", patternStore.upsertCalls)
+	}
+}
+
+// --- Task 5a: confidence threshold gating on detail panel / suggestion APIs ---
+
+type fakeDetailPatternStore struct {
+	descriptionPatterns []txn.PayeePattern
+}
+
+func (f *fakeDetailPatternStore) FindPatternsByDescription(context.Context, string, string, int) ([]txn.PayeePattern, error) {
+	return f.descriptionPatterns, nil
+}
+func (f *fakeDetailPatternStore) FindPatternsByPayeeID(context.Context, string, string, int) ([]txn.PayeePattern, error) {
+	return nil, nil
+}
+func (f *fakeDetailPatternStore) UpsertPattern(context.Context, txn.PayeePattern) error {
+	return nil
+}
+
+func newDetailTestServer(t *testing.T, descriptionPatterns []txn.PayeePattern) *Server {
+	t.Helper()
+
+	cache, err := NewTemplateCache(false)
+	if err != nil {
+		t.Fatalf("NewTemplateCache: %v", err)
+	}
+
+	patternStore := &fakeDetailPatternStore{descriptionPatterns: descriptionPatterns}
+	suggestionEngine := txn.NewSuggestionEngine(patternStore)
+	txnStore := &fakeUploadTxnStore{
+		transactions: []txn.Transaction{
+			{ID: "txn1", Description: "Purchase at UNMATCHED MERCHANT", Account: txn.BankAccount{ID: "acc1"}},
+		},
+	}
+	processor := txn.NewProcessor(nil, txnStore, fakeBudgetFinder{}, nil, suggestionEngine, nil)
+	syncer := ynab.NewSyncer(nil, fakeUploadBudgetStorer{}, nil, fakeCategoryStorer{}, fakePayeeStorer{}, nil)
+
+	return &Server{
+		Syncer:        syncer,
+		TxnProcessor:  processor,
+		TemplateCache: cache,
+	}
+}
+
+func TestDetailBankTxnHandler_LowConfidenceSuggestion_LeavesSugPayeeIDEmpty(t *testing.T) {
+	// fakePayeeStorer only knows about "Lidl" - the transaction description
+	// ("Purchase at UNMATCHED MERCHANT") won't match it via the YNAB-name
+	// fallback either, so a low-confidence pattern suggestion must not leak
+	// through as the prefilled payee.
+	lowConfidencePattern := txn.PayeePattern{
+		PayeeID:               "pattern-p",
+		PayeeName:             "PatternPayee",
+		NormalizedDescription: "completely different tokens",
+		OccurrenceCount:       1,
+		LastSeen:              time.Now().AddDate(-1, 0, 0),
+	}
+	s := newDetailTestServer(t, []txn.PayeePattern{lowConfidencePattern})
+
+	req := httptest.NewRequest(http.MethodGet, "/bank-txns/txn1/detail", nil)
+	req = req.WithContext(context.Background())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "txn1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rec := httptest.NewRecorder()
+
+	s.detailBankTxnHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "pattern-p") {
+		t.Errorf("expected low-confidence pattern payee not to be prefilled, got body: %s", rec.Body.String())
+	}
+}
+
+func TestCategorySuggestionsHandler_OmitsSubSuggestThresholdSuggestion(t *testing.T) {
+	lowConfidencePattern := txn.PayeePattern{
+		CategoryID:            "cat-low",
+		CategoryName:          "LowConfCategory",
+		NormalizedDescription: "completely different tokens",
+		OccurrenceCount:       1,
+		LastSeen:              time.Now().AddDate(-1, 0, 0),
+	}
+	s := newDetailTestServer(t, []txn.PayeePattern{lowConfidencePattern})
+
+	req := httptest.NewRequest(http.MethodGet, "/category-suggestions?budget_id=budget1&description=Purchase+at+UNMATCHED+MERCHANT", nil)
+	rec := httptest.NewRecorder()
+
+	s.categorySuggestionsHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "cat-low") {
+		t.Errorf("expected sub-SuggestThreshold category omitted from response, got: %s", rec.Body.String())
+	}
+}
+
+func TestPayeeSuggestionsHandler_OmitsSubSuggestThresholdSuggestion(t *testing.T) {
+	lowConfidencePattern := txn.PayeePattern{
+		PayeeID:               "payee-low",
+		PayeeName:             "LowConfPayee",
+		NormalizedDescription: "completely different tokens",
+		OccurrenceCount:       1,
+		LastSeen:              time.Now().AddDate(-1, 0, 0),
+	}
+	s := newDetailTestServer(t, []txn.PayeePattern{lowConfidencePattern})
+
+	req := httptest.NewRequest(http.MethodGet, "/payee-suggestions?budget_id=budget1&description=Purchase+at+UNMATCHED+MERCHANT", nil)
+	rec := httptest.NewRecorder()
+
+	s.payeeSuggestionsHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "payee-low") {
+		t.Errorf("expected sub-SuggestThreshold payee omitted from response, got: %s", rec.Body.String())
 	}
 }

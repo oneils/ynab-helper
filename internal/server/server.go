@@ -50,9 +50,6 @@ func (s *Server) routes() chi.Router {
 			r.Get("/{id}/detail", s.detailBankTxnHandler)
 			r.Post("/{id}/skip", s.skipBankTxnHandler)
 
-			// Inline editing endpoints
-			r.Post("/{id}/save-inline", s.saveInlineTxnHandler)
-
 			// Bulk operations endpoints
 			r.Post("/bulk-skip", s.bulkSkipTxnsHandler)
 

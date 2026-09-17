@@ -2,33 +2,27 @@
 <button
     type="button"
     id="sort-toggle-btn"
-    class="sort-toggle"
-    hx-get="/bank-txns?budget={{.Budget}}&account={{.Account}}&status={{.ActiveStatus}}&sort={{if eq .Sort "desc"}}asc{{else}}desc{{end}}"
+    class="sort-toggle{{if eq .Sort "asc"}} sort-toggle--asc{{end}}"
+    hx-get="/bank-txns"
     hx-target="#txn-list-panel"
     hx-swap="innerHTML"
+    hx-include="[name='budget'], [name='account'], #status-state, #sort-state"
     hx-disabled-elt="this"
-    onclick="localStorage.setItem('ynab_txn_sort', '{{if eq .Sort "desc"}}asc{{else}}desc{{end}}')"
+    onclick="toggleTransactionSort(this)"
 >
-    {{if eq .Sort "desc"}}
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="19" x2="12" y2="5"></line>
         <polyline points="5 12 12 5 19 12"></polyline>
     </svg>
+    {{if eq .Sort "desc"}}
     <span>Oldest first</span>
     {{else}}
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19"></line>
-        <polyline points="19 12 12 19 5 12"></polyline>
-    </svg>
     <span>Newest first</span>
     {{end}}
 </button>
-<input type="hidden" id="sort-state" name="sort" value="{{.Sort}}">
 {{end}}
 
 {{define "bank-transactions"}}
-
-{{template "sort-toggle" .}}
 
 {{if .Txns}}
 <figure class="txn-table-scroll">

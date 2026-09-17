@@ -1,23 +1,38 @@
-{{define "accounts-select"}}
+{{define "account-select-label"}}
+<label for="account">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+    >
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+        <line x1="1" y1="10" x2="23" y2="10"></line>
+    </svg>
+    Select Account
+</label>
+{{end}}
 
+{{define "accounts-select-import"}}
 <div id="accounts-select" class="form-group">
-    <label for="account">
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-        >
-            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-            <line x1="1" y1="10" x2="23" y2="10"></line>
-        </svg>
-        Select Account
-    </label>
+    {{template "account-select-label" .}}
+    <select id="account" name="account" required>
+        <option value="" {{if eq .Account ""}}selected{{end}}>Select account...</option>
+        {{range .Accs}}
+        <option value="{{.ID}}" {{if eq $.Account .ID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+    </select>
+</div>
+{{end}}
+
+{{define "accounts-select-history"}}
+<div id="accounts-select" class="form-group">
+    {{template "account-select-label" .}}
     <select
         id="account"
         name="account"
@@ -32,5 +47,4 @@
         {{end}}
     </select>
 </div>
-
 {{end}}

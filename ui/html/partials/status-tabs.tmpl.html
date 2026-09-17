@@ -7,7 +7,7 @@
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
         hx-include="#sort-state"
-        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+        onclick="setTransactionStatus('', this)"
     >
         All
     </button>
@@ -18,7 +18,7 @@
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
         hx-include="#sort-state"
-        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+        onclick="setTransactionStatus('DRAFT', this)"
     >
         Needs Review
         {{with index .StatusCounts "DRAFT"}}
@@ -32,7 +32,7 @@
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
         hx-include="#sort-state"
-        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+        onclick="setTransactionStatus('PROCESSED', this)"
     >
         Accepted
         {{with index .StatusCounts "PROCESSED"}}
@@ -46,7 +46,7 @@
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
         hx-include="#sort-state"
-        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+        onclick="setTransactionStatus('SKIPPED', this)"
     >
         Skipped
         {{with index .StatusCounts "SKIPPED"}}
@@ -60,12 +60,15 @@
         hx-target="#txn-list-panel"
         hx-swap="innerHTML"
         hx-include="#sort-state"
-        onclick="document.querySelectorAll('#status-tabs .status-tab').forEach(function(t){t.classList.remove('status-tab--active')});this.classList.add('status-tab--active')"
+        onclick="setTransactionStatus('INVALID', this)"
     >
         Invalid
         {{with index .StatusCounts "INVALID"}}
         <span class="status-tab-count">{{.}}</span>
         {{end}}
     </button>
+    <input type="hidden" id="status-state" name="status" value="{{.ActiveStatus}}">
+    <input type="hidden" id="sort-state" name="sort" value="{{.Sort}}">
+    {{template "sort-toggle" .}}
 </div>
 {{end}}

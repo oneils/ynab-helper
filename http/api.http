@@ -30,13 +30,6 @@ POST {{base_url}}/bank-txns/<id>/skip?accId={{ynab_account_id}}&status=pending
 Content-Type: application/x-www-form-urlencoded
 
 
-### Save inline transaction (sets payee + category, records pattern)
-POST {{base_url}}/bank-txns/<id>/save-inline?status=pending
-Content-Type: application/x-www-form-urlencoded
-
-budget={{ynab_budget_id}}&account={{ynab_account_id}}&payee=<payee_id>&category=<category_id>&memo=Coffee&amount=-1500&txnDate=2026-06-27
-
-
 ### Bulk skip transactions
 POST {{base_url}}/bank-txns/bulk-skip
 Content-Type: application/x-www-form-urlencoded

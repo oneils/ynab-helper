@@ -1258,6 +1258,7 @@ footer {
 .stat-new .stat-value { color: var(--status-available); }
 .stat-duplicate .stat-value { color: var(--status-warning); }
 .stat-error .stat-value { color: var(--status-danger); }
+.stat-already-in-ynab .stat-value { color: var(--status-neutral); }
 
 .preview-table tbody tr.preview-row-error {
     background-color: var(--status-danger-bg);
@@ -1265,6 +1266,10 @@ footer {
 
 .preview-table tbody tr.preview-row-duplicate {
     background-color: var(--status-warning-bg);
+}
+
+.preview-table tbody tr.preview-row-already-in-ynab {
+    background-color: var(--status-neutral-bg);
 }
 
 .preview-table tbody tr.preview-row-new {
@@ -1340,6 +1345,11 @@ footer {
 .badge-error {
     background: var(--status-danger-bg);
     color: var(--status-danger);
+}
+
+.badge-neutral {
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral);
 }
 
 .file-name {

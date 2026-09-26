@@ -3,6 +3,7 @@ package txn
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -40,6 +41,11 @@ type ParserMappingLookup interface {
 	GetParserMapping(ctx context.Context, accountID string) (string, error)
 }
 
+// BudgetTxnFinder looks up cached YNAB transactions for match detection.
+type BudgetTxnFinder interface {
+	FindBudgetTxnMatch(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error)
+}
+
 // Processor handles transaction processing and storage.
 type Processor struct {
 	parsers          map[string]ReportParser
@@ -48,10 +54,11 @@ type Processor struct {
 	client           YnabUploader
 	suggestionEngine *SuggestionEngine
 	mappingStore     ParserMappingLookup
+	budgetTxnFinder  BudgetTxnFinder
 }
 
 // NewProcessor creates a new transaction processor.
-func NewProcessor(parsers map[string]ReportParser, txnStore TransactionStorer, budgetStore BudgetFinder, client YnabUploader, suggestionEngine *SuggestionEngine, mappingStore ParserMappingLookup) *Processor {
+func NewProcessor(parsers map[string]ReportParser, txnStore TransactionStorer, budgetStore BudgetFinder, client YnabUploader, suggestionEngine *SuggestionEngine, mappingStore ParserMappingLookup, budgetTxnFinder BudgetTxnFinder) *Processor {
 	return &Processor{
 		parsers:          parsers,
 		txnStore:         txnStore,
@@ -59,6 +66,7 @@ func NewProcessor(parsers map[string]ReportParser, txnStore TransactionStorer, b
 		client:           client,
 		suggestionEngine: suggestionEngine,
 		mappingStore:     mappingStore,
+		budgetTxnFinder:  budgetTxnFinder,
 	}
 }
 
@@ -82,13 +90,15 @@ type ProcessParams struct {
 
 // PreviewResult contains preview data for CSV import.
 type PreviewResult struct {
-	DetectedFormat   string
-	TotalCount       int
-	DuplicateCount   int
-	NewCount         int
-	ErrorCount       int
-	Transactions     []Transaction // Sample only (first 10)
-	ValidationErrors []string
+	DetectedFormat     string
+	TotalCount         int
+	DuplicateCount     int
+	NewCount           int
+	AlreadyInYnabCount int
+	ImportableCount    int
+	ErrorCount         int
+	Transactions       []Transaction // Sample only (first 10)
+	ValidationErrors   []string
 }
 
 // SaveForm contains form data for saving a transaction to YNAB.
@@ -138,12 +148,32 @@ func (p *Processor) Process(ctx context.Context, params ProcessParams) error {
 	}, data)
 
 	for _, t := range txns {
+		if match, found := p.matchExistingYnabTxn(ctx, t); found {
+			t.Status = TransactionSkipped
+			t.MatchNote = fmt.Sprintf("possible match: existing YNAB txn on %s, matched account/amount", match.Date)
+		}
 		if err := p.txnStore.InsertTransaction(ctx, t); err != nil {
 			return fmt.Errorf("saving transaction: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// matchExistingYnabTxn checks whether a parsed transaction matches an existing
+// cached YNAB transaction (account + amount + date window). It fails open:
+// a nil finder, an invalid transaction, or a lookup error all result in no match.
+func (p *Processor) matchExistingYnabTxn(ctx context.Context, t Transaction) (ynab.BudgetTxn, bool) {
+	if p.budgetTxnFinder == nil || t.Status == TransactionInvalid {
+		return ynab.BudgetTxn{}, false
+	}
+
+	match, found, err := p.budgetTxnFinder.FindBudgetTxnMatch(ctx, t.Account.ID, toMilliunits(t.Amount), t.TxnTime)
+	if err != nil {
+		slog.Warn("looking up existing YNAB transaction match", "error", err)
+		return ynab.BudgetTxn{}, false
+	}
+	return match, found
 }
 
 // Fetch retrieves transactions for an account.
@@ -213,22 +243,34 @@ func (p *Processor) Preview(ctx context.Context, params ProcessParams) (*Preview
 		}
 
 		// Check for duplicates by trying to find existing transaction with same ID
+		isDuplicate := false
 		if txn.ID != "" {
 			_, err := p.txnStore.FindTransactionByID(ctx, txn.ID)
 			if err == nil {
 				// Transaction exists = duplicate
+				isDuplicate = true
 				result.DuplicateCount++
 				txns[i].Status = "DUPLICATE" // Mark as duplicate for display
 			}
 		}
 
+		// If not already a hash-ID duplicate, check for a field-based match
+		// against the cached YNAB transactions.
+		if !isDuplicate {
+			if _, found := p.matchExistingYnabTxn(ctx, txn); found {
+				result.AlreadyInYnabCount++
+				txns[i].Status = "ALREADY_IN_YNAB"
+			}
+		}
+
 		// Add to sample (first 10 transactions)
 		if i < 10 {
-			result.Transactions = append(result.Transactions, txn)
+			result.Transactions = append(result.Transactions, txns[i])
 		}
 	}
 
-	result.NewCount = result.TotalCount - result.DuplicateCount - result.ErrorCount
+	result.NewCount = result.TotalCount - result.DuplicateCount - result.AlreadyInYnabCount - result.ErrorCount
+	result.ImportableCount = result.NewCount + result.AlreadyInYnabCount
 
 	return result, nil
 }
@@ -260,13 +302,11 @@ func (p *Processor) SaveToYnab(ctx context.Context, form SaveForm) error {
 		return fmt.Errorf("parsing amount: %w", err)
 	}
 
-	amount := int(math.Round(amountFloat * 1000))
-
 	err = p.client.Upload(ynab.TxnReq{
 		BudgetID:   form.BudgetID,
 		AccountID:  form.AccountID,
 		Date:       form.TxnDate,
-		Amount:     amount,
+		Amount:     toMilliunits(amountFloat),
 		PayeeID:    form.PayeeID,
 		CategoryID: form.CategoryID,
 		Memo:       form.Memo,
@@ -293,6 +333,11 @@ func (p *Processor) SuggestPayee(t Transaction, payees []ynab.Payee) ynab.Payee 
 		}
 	}
 	return ynab.Payee{}
+}
+
+// toMilliunits converts a decimal currency amount to YNAB's milliunit format.
+func toMilliunits(amount float64) int {
+	return int(math.Round(amount * 1000))
 }
 
 // parseYnabTime parses a date string in YNAB format.

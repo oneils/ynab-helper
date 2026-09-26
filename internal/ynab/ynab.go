@@ -92,6 +92,47 @@ type Payee struct {
 	LastCategoryID    string `json:"last_category_id" bson:"last_category_id"`
 }
 
+// BudgetTxn represents a YNAB transaction cached locally. Used for duplicate
+// detection against manually-entered YNAB transactions, and — since this is
+// kept as a historical record rather than a disposable cache — as a reusable
+// local copy of full transaction data.
+type BudgetTxn struct {
+	ID                    string         `json:"id"`
+	BudgetID              string         `json:"-"`
+	AccountID             string         `json:"account_id"`
+	AccountName           string         `json:"account_name"`
+	Date                  string         `json:"date"`
+	Amount                int            `json:"amount"`
+	Memo                  string         `json:"memo"`
+	Cleared               string         `json:"cleared"`
+	Approved              bool           `json:"approved"`
+	FlagColor             string         `json:"flag_color"`
+	PayeeID               string         `json:"payee_id"`
+	PayeeName             string         `json:"payee_name"`
+	CategoryID            string         `json:"category_id"`
+	CategoryName          string         `json:"category_name"`
+	TransferAccountID     string         `json:"transfer_account_id"`
+	TransferTransactionID string         `json:"transfer_transaction_id"`
+	MatchedTransactionID  string         `json:"matched_transaction_id"`
+	ImportID              string         `json:"import_id"`
+	Deleted               bool           `json:"deleted"`
+	Subtransactions       []BudgetSubTxn `json:"subtransactions"`
+}
+
+// BudgetSubTxn represents one split of a YNAB transaction cached locally.
+type BudgetSubTxn struct {
+	ID                string `json:"id"`
+	TransactionID     string `json:"transaction_id"`
+	Amount            int    `json:"amount"`
+	Memo              string `json:"memo"`
+	PayeeID           string `json:"payee_id"`
+	PayeeName         string `json:"payee_name"`
+	CategoryID        string `json:"category_id"`
+	CategoryName      string `json:"category_name"`
+	TransferAccountID string `json:"transfer_account_id"`
+	Deleted           bool   `json:"deleted"`
+}
+
 // SyncHistory represents a YNAB sync operation history record.
 type SyncHistory struct {
 	ID               string    `json:"id" bson:"_id"`

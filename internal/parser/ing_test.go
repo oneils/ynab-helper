@@ -28,22 +28,22 @@ func ingConfig() Config {
 // that matter for a given test via the positional arguments.
 func ingRow(date, counterparty, description, txnType, txnID, amount, currency, balance string) []string {
 	return []string{
-		date,           // 0 Data transakcji
-		date,           // 1 Data księgowania
-		counterparty,   // 2 Dane kontrahenta
-		description,    // 3 Tytuł
-		"12345678",     // 4 Nr rachunku
-		"ING Bank",     // 5 Nazwa banku
-		txnType,        // 6 Szczegóły
-		txnID,          // 7 Nr transakcji
-		amount,         // 8 Kwota transakcji
-		currency,       // 9 Waluta
-		"",             // 10 Kwota blokady
-		"",             // 11 Waluta
-		"",             // 12 Kwota płatności w walucie
-		"",             // 13 Waluta
-		balance,        // 14 Saldo po transakcji
-		currency,       // 15 Waluta
+		date,               // 0 Data transakcji
+		date,               // 1 Data księgowania
+		counterparty,       // 2 Dane kontrahenta
+		description,        // 3 Tytuł
+		"12345678",         // 4 Nr rachunku
+		"ING Bank",         // 5 Nazwa banku
+		txnType,            // 6 Szczegóły
+		txnID,              // 7 Nr transakcji
+		amount,             // 8 Kwota transakcji
+		currency,           // 9 Waluta
+		"",                 // 10 Kwota blokady
+		"",                 // 11 Waluta
+		"",                 // 12 Kwota płatności w walucie
+		"",                 // 13 Waluta
+		balance,            // 14 Saldo po transakcji
+		currency,           // 15 Waluta
 		"", "", "", "", "", // 16-20 padding
 	}
 }

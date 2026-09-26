@@ -12,9 +12,10 @@ var defaultFixtureJSON []byte
 
 // Fixture is the data model used by FakeClient to serve mock YNAB data.
 type Fixture struct {
-	Budgets    []Budget                `json:"budgets"`
-	Categories map[string]CategoryData `json:"categories"` // keyed by budget ID
-	Payees     map[string]PayeeData    `json:"payees"`     // keyed by budget ID
+	Budgets      []Budget                   `json:"budgets"`
+	Categories   map[string]CategoryData    `json:"categories"`   // keyed by budget ID
+	Payees       map[string]PayeeData       `json:"payees"`       // keyed by budget ID
+	Transactions map[string]TransactionData `json:"transactions"` // keyed by budget ID
 }
 
 // LoadFixture loads a Fixture. If path is empty, the built-in default

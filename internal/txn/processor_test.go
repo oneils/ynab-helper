@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/oneils/ynab-helper/internal/ynab"
 )
@@ -145,7 +146,7 @@ func TestProcessor_Fetch(t *testing.T) {
 		},
 	}
 
-	processor := NewProcessor(nil, store, nil, nil, nil, nil)
+	processor := NewProcessor(nil, store, nil, nil, nil, nil, nil)
 
 	t.Run("Fetch by account ID", func(t *testing.T) {
 		params := ProcessParams{AccountID: "acc1", Status: ""}
@@ -186,7 +187,7 @@ func TestProcessorFetch_PassesSortToStore(t *testing.T) {
 		},
 	}
 
-	processor := NewProcessor(nil, store, nil, nil, nil, nil)
+	processor := NewProcessor(nil, store, nil, nil, nil, nil, nil)
 
 	_, err := processor.Fetch(ctx, ProcessParams{AccountID: "acc1", Sort: "asc"})
 	if err != nil {
@@ -206,7 +207,7 @@ func TestProcessor_FetchByID(t *testing.T) {
 		},
 	}
 
-	processor := NewProcessor(nil, store, nil, nil, nil, nil)
+	processor := NewProcessor(nil, store, nil, nil, nil, nil, nil)
 
 	t.Run("Fetch existing transaction", func(t *testing.T) {
 		txn, err := processor.FetchByID(ctx, "txn-123")
@@ -240,7 +241,7 @@ func TestProcessor_Skip(t *testing.T) {
 		},
 	}
 
-	processor := NewProcessor(nil, store, nil, nil, nil, nil)
+	processor := NewProcessor(nil, store, nil, nil, nil, nil, nil)
 
 	err := processor.Skip(ctx, "txn-123")
 
@@ -265,7 +266,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 
 		client := &mockYnabClient{}
 
-		processor := NewProcessor(nil, store, nil, client, nil, nil)
+		processor := NewProcessor(nil, store, nil, client, nil, nil, nil)
 
 		form := SaveForm{
 			TxnID:      "txn-123",
@@ -308,7 +309,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 	})
 
 	t.Run("Invalid date format", func(t *testing.T) {
-		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil, nil)
+		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil, nil, nil)
 
 		form := SaveForm{
 			TxnID:   "txn-123",
@@ -324,7 +325,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 	})
 
 	t.Run("Invalid amount format", func(t *testing.T) {
-		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil, nil)
+		processor := NewProcessor(nil, &mockTransactionStore{}, nil, &mockYnabClient{}, nil, nil, nil)
 
 		form := SaveForm{
 			TxnID:   "txn-123",
@@ -347,7 +348,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 			},
 		}
 
-		processor := NewProcessor(nil, store, nil, client, nil, nil)
+		processor := NewProcessor(nil, store, nil, client, nil, nil, nil)
 
 		form := SaveForm{
 			TxnID:   "txn-123",
@@ -364,7 +365,7 @@ func TestProcessor_SaveToYnab(t *testing.T) {
 }
 
 func TestProcessor_SuggestPayee(t *testing.T) {
-	processor := NewProcessor(nil, nil, nil, nil, nil, nil)
+	processor := NewProcessor(nil, nil, nil, nil, nil, nil, nil)
 
 	payees := []ynab.Payee{
 		{ID: "p1", Name: "BIEDRONKA"},
@@ -477,7 +478,7 @@ func TestProcessor_Normalize(t *testing.T) {
 }
 
 func TestProcessor_ParseYnabTime(t *testing.T) {
-	processor := NewProcessor(nil, nil, nil, nil, nil, nil)
+	processor := NewProcessor(nil, nil, nil, nil, nil, nil, nil)
 
 	tests := []struct {
 		name      string
@@ -536,7 +537,7 @@ func TestProcessor_ParserNames(t *testing.T) {
 		"Santander": nil,
 		"Revolut":   nil,
 	}
-	processor := NewProcessor(parsers, nil, nil, nil, nil, nil)
+	processor := NewProcessor(parsers, nil, nil, nil, nil, nil, nil)
 
 	names := processor.ParserNames()
 	if len(names) != 2 {
@@ -565,7 +566,7 @@ func TestProcessor_Process_ParserMapping(t *testing.T) {
 	t.Run("errors when no mapping found", func(t *testing.T) {
 		store := &mockTransactionStore{}
 		mapping := &mockParserMappingLookup{parserName: ""}
-		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping)
+		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping, nil)
 
 		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
 
@@ -577,7 +578,7 @@ func TestProcessor_Process_ParserMapping(t *testing.T) {
 	t.Run("errors when mapped parser is not registered", func(t *testing.T) {
 		store := &mockTransactionStore{}
 		mapping := &mockParserMappingLookup{parserName: "Unknown"}
-		processor := NewProcessor(map[string]ReportParser{}, store, budgetStore, nil, nil, mapping)
+		processor := NewProcessor(map[string]ReportParser{}, store, budgetStore, nil, nil, mapping, nil)
 
 		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
 
@@ -595,7 +596,7 @@ func TestProcessor_Process_ParserMapping(t *testing.T) {
 			},
 		}
 		parsers := map[string]ReportParser{"Santander": parser}
-		processor := NewProcessor(parsers, store, budgetStore, nil, nil, mapping)
+		processor := NewProcessor(parsers, store, budgetStore, nil, nil, mapping, nil)
 
 		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
 
@@ -610,12 +611,116 @@ func TestProcessor_Process_ParserMapping(t *testing.T) {
 	t.Run("propagates mapping lookup errors", func(t *testing.T) {
 		store := &mockTransactionStore{}
 		mapping := &mockParserMappingLookup{err: errors.New("db error")}
-		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping)
+		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping, nil)
 
 		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
 
 		if err == nil {
 			t.Fatal("Expected error to be propagated")
+		}
+	})
+}
+
+func TestProcessor_Process_AlreadyInYnab(t *testing.T) {
+	ctx := context.Background()
+
+	budgetStore := &mockBudgetFinder{
+		budget: ynab.Budget{
+			Accounts: []ynab.Account{
+				{ID: "acc1", Name: "My Checking"},
+			},
+		},
+	}
+	mapping := &mockParserMappingLookup{parserName: "Santander"}
+
+	t.Run("matched row is saved as SKIPPED with a MatchNote", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -12.34, Status: TransactionDraft},
+				}
+			},
+		}
+		finder := &mockBudgetTxnFinder{
+			matchFunc: func(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+				return ynab.BudgetTxn{ID: "y1", Date: "2026-06-11"}, true, nil
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, finder)
+
+		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(store.transactions) != 1 {
+			t.Fatalf("Expected 1 transaction saved, got %d", len(store.transactions))
+		}
+		saved := store.transactions[0]
+		if saved.Status != TransactionSkipped {
+			t.Errorf("Expected Status SKIPPED, got %q", saved.Status)
+		}
+		if saved.MatchNote == "" {
+			t.Error("Expected non-empty MatchNote")
+		}
+	})
+
+	t.Run("non-matched row keeps its original status and empty MatchNote", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -10, Status: TransactionDraft},
+				}
+			},
+		}
+		finder := &mockBudgetTxnFinder{
+			matchFunc: func(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+				return ynab.BudgetTxn{}, false, nil
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, finder)
+
+		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(store.transactions) != 1 {
+			t.Fatalf("Expected 1 transaction saved, got %d", len(store.transactions))
+		}
+		saved := store.transactions[0]
+		if saved.Status != TransactionDraft {
+			t.Errorf("Expected Status DRAFT, got %q", saved.Status)
+		}
+		if saved.MatchNote != "" {
+			t.Errorf("Expected empty MatchNote, got %q", saved.MatchNote)
+		}
+	})
+
+	t.Run("nil budgetTxnFinder behaves like today", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -10, Status: TransactionDraft},
+				}
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, nil)
+
+		err := processor.Process(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(store.transactions) != 1 {
+			t.Fatalf("Expected 1 transaction saved, got %d", len(store.transactions))
+		}
+		saved := store.transactions[0]
+		if saved.Status != TransactionDraft {
+			t.Errorf("Expected Status DRAFT, got %q", saved.Status)
+		}
+		if saved.MatchNote != "" {
+			t.Errorf("Expected empty MatchNote, got %q", saved.MatchNote)
 		}
 	})
 }
@@ -634,7 +739,7 @@ func TestProcessor_Preview_ParserMapping(t *testing.T) {
 	t.Run("returns validation error (no Go error) when no mapping found", func(t *testing.T) {
 		store := &mockTransactionStore{}
 		mapping := &mockParserMappingLookup{parserName: ""}
-		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping)
+		processor := NewProcessor(nil, store, budgetStore, nil, nil, mapping, nil)
 
 		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
 
@@ -649,7 +754,7 @@ func TestProcessor_Preview_ParserMapping(t *testing.T) {
 	t.Run("returns validation error (no Go error) when parser is unknown", func(t *testing.T) {
 		store := &mockTransactionStore{}
 		mapping := &mockParserMappingLookup{parserName: "Unknown"}
-		processor := NewProcessor(map[string]ReportParser{}, store, budgetStore, nil, nil, mapping)
+		processor := NewProcessor(map[string]ReportParser{}, store, budgetStore, nil, nil, mapping, nil)
 
 		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
 
@@ -658,6 +763,175 @@ func TestProcessor_Preview_ParserMapping(t *testing.T) {
 		}
 		if len(result.ValidationErrors) == 0 {
 			t.Fatal("Expected a validation error")
+		}
+	})
+}
+
+type mockBudgetTxnFinder struct {
+	matchFunc func(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error)
+}
+
+func (m *mockBudgetTxnFinder) FindBudgetTxnMatch(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+	return m.matchFunc(ctx, accountID, amountMilliunits, date)
+}
+
+func TestProcessor_Preview_AlreadyInYnab(t *testing.T) {
+	ctx := context.Background()
+
+	budgetStore := &mockBudgetFinder{
+		budget: ynab.Budget{
+			Accounts: []ynab.Account{
+				{ID: "acc1", Name: "My Checking"},
+			},
+		},
+	}
+	mapping := &mockParserMappingLookup{parserName: "Santander"}
+
+	t.Run("matched row is flagged and excluded from NewCount", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -12.34, Status: TransactionDraft},
+				}
+			},
+		}
+		finder := &mockBudgetTxnFinder{
+			matchFunc: func(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+				return ynab.BudgetTxn{ID: "y1"}, true, nil
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, finder)
+
+		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result.AlreadyInYnabCount != 1 {
+			t.Errorf("Expected AlreadyInYnabCount 1, got %d", result.AlreadyInYnabCount)
+		}
+		if result.NewCount != 0 {
+			t.Errorf("Expected NewCount 0, got %d", result.NewCount)
+		}
+		if len(result.Transactions) != 1 || result.Transactions[0].Status != "ALREADY_IN_YNAB" {
+			t.Fatalf("Expected sample transaction status ALREADY_IN_YNAB, got %+v", result.Transactions)
+		}
+	})
+
+	t.Run("negative amount (outflow) row that matches", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -123.45, Status: TransactionDraft},
+				}
+			},
+		}
+		var gotAmount int
+		finder := &mockBudgetTxnFinder{
+			matchFunc: func(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+				gotAmount = amountMilliunits
+				return ynab.BudgetTxn{ID: "y1"}, true, nil
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, finder)
+
+		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if gotAmount != -123450 {
+			t.Errorf("Expected amount -123450 milliunits, got %d", gotAmount)
+		}
+		if result.AlreadyInYnabCount != 1 {
+			t.Errorf("Expected AlreadyInYnabCount 1, got %d", result.AlreadyInYnabCount)
+		}
+	})
+
+	t.Run("no match is unaffected", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -10, Status: TransactionDraft},
+				}
+			},
+		}
+		finder := &mockBudgetTxnFinder{
+			matchFunc: func(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+				return ynab.BudgetTxn{}, false, nil
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, finder)
+
+		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result.AlreadyInYnabCount != 0 {
+			t.Errorf("Expected AlreadyInYnabCount 0, got %d", result.AlreadyInYnabCount)
+		}
+		if result.NewCount != 1 {
+			t.Errorf("Expected NewCount 1, got %d", result.NewCount)
+		}
+	})
+
+	t.Run("mix of invalid, matched, and new rows", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -10, Status: TransactionInvalid, ErrorMsg: "bad row"},
+					{ID: "t2", Account: acc, Amount: -20, Status: TransactionDraft},
+					{ID: "t3", Account: acc, Amount: -30, Status: TransactionDraft},
+				}
+			},
+		}
+		finder := &mockBudgetTxnFinder{
+			matchFunc: func(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+				if amountMilliunits == -20000 {
+					return ynab.BudgetTxn{ID: "y1"}, true, nil
+				}
+				return ynab.BudgetTxn{}, false, nil
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, finder)
+
+		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result.ErrorCount != 1 {
+			t.Errorf("Expected ErrorCount 1, got %d", result.ErrorCount)
+		}
+		if result.AlreadyInYnabCount != 1 {
+			t.Errorf("Expected AlreadyInYnabCount 1, got %d", result.AlreadyInYnabCount)
+		}
+		if result.NewCount != 1 {
+			t.Errorf("Expected NewCount 1, got %d", result.NewCount)
+		}
+	})
+
+	t.Run("nil budgetTxnFinder behaves like today", func(t *testing.T) {
+		parser := &mockReportParser{
+			parseFunc: func(acc BankAccount, data [][]string) []Transaction {
+				return []Transaction{
+					{ID: "t1", Account: acc, Amount: -10, Status: TransactionDraft},
+				}
+			},
+		}
+		store := &mockTransactionStore{}
+		processor := NewProcessor(map[string]ReportParser{"Santander": parser}, store, budgetStore, nil, nil, mapping, nil)
+
+		result, err := processor.Preview(ctx, ProcessParams{AccountID: "acc1", Data: [][]string{{"header"}}})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result.AlreadyInYnabCount != 0 {
+			t.Errorf("Expected AlreadyInYnabCount 0, got %d", result.AlreadyInYnabCount)
+		}
+		if result.NewCount != 1 {
+			t.Errorf("Expected NewCount 1, got %d", result.NewCount)
 		}
 	})
 }

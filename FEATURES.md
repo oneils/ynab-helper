@@ -94,3 +94,30 @@ Two-stage fallback with confidence-tiered gating:
 Each suggestion's confidence score is classified into a tier: below `SuggestThreshold` it's hidden entirely, at or above `SuggestThreshold` it's shown as a suggestion, and at or above `PrefillThreshold` it auto-fills the form field.
 
 Unknown transactions (no match in either stage) → empty dropdowns.
+
+## Already-in-YNAB Detection
+
+Catches transactions the user typed directly into YNAB by hand, which would
+otherwise reappear as "new" in a later CSV import and risk being pushed to
+YNAB a second time.
+
+1. **Background sync** — on the same hourly (+ on-startup) schedule as
+   accounts/categories/payees, `Syncer.SyncTransactions` fetches each
+   budget's real YNAB transactions (`since_date` = 6 months back) into a
+   local `budget_transactions` cache table, keyed by budget/account/date/
+   amount. Stale rows are purged (delete-then-reinsert) so YNAB-side
+   deletions are reflected locally.
+2. **Field-based match at import time** — for each CSV row not already
+   caught by the existing hash-ID duplicate check, `Processor` looks for a
+   cached YNAB transaction with the same account + amount and a date within
+   ±3 days (to absorb bank settlement-date drift). Currency and payee/
+   description are not part of the match key.
+3. **Auto-skip, not drop** — a match is flagged `"ALREADY_IN_YNAB"` in the
+   preview (its own stat card and row badge) and, on import, saved with
+   status `SKIPPED` and a `MatchNote` describing the matched YNAB
+   transaction's date. It's never silently dropped or auto-sent, and stays
+   fully recoverable — opening the transaction still allows "Accept & Send
+   to YNAB" if the match was a false positive.
+
+Fail-open throughout: with no sync data yet, or if the match lookup errors,
+import behaves exactly as it did before this feature existed.

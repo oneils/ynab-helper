@@ -12,6 +12,13 @@
         <div class="detail-description">{{.Txn.Description}}</div>
     </div>
 
+    {{if .Txn.MatchNote}}
+    <div class="detail-field">
+        <label class="detail-label">Match Note</label>
+        <div class="detail-description">{{.Txn.MatchNote}}</div>
+    </div>
+    {{end}}
+
     <form id="detail-form" data-description="{{.Txn.Description}}">
         <input type="hidden" name="txnID" value="{{.Txn.ID}}">
         <input type="hidden" name="budget" value="{{.BudgetID}}">

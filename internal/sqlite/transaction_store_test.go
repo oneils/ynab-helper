@@ -37,7 +37,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 	    txn_time TEXT NOT NULL,
 	    raw_text TEXT,
 	    raw_line_number INTEGER,
-	    error_msg TEXT
+	    error_msg TEXT,
+	    match_note TEXT
 	);
 	CREATE INDEX idx_txn_account_status ON transactions(account_id, status);
 	`
@@ -271,4 +272,100 @@ func TestCountByStatus(t *testing.T) {
 			t.Errorf("accB: expected 1 PROCESSED, got %d", countsB[txn.TransactionProcessed])
 		}
 	})
+}
+
+func newTestTxn(id, accountID string, matchNote string) txn.Transaction {
+	now := time.Now().UTC()
+	return txn.Transaction{
+		ID:          id,
+		Amount:      12.34,
+		Currency:    "USD",
+		Description: "test desc",
+		Payee:       "test payee",
+		Account:     txn.BankAccount{ID: accountID, Name: "Test Account"},
+		Status:      txn.TransactionDraft,
+		CreatedAt:   now,
+		TxnTime:     now,
+		MatchNote:   matchNote,
+	}
+}
+
+func TestInsertTransaction_MatchNote(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	store := NewTransactionStore(db)
+	ctx := context.Background()
+
+	t.Run("with match note", func(t *testing.T) {
+		in := newTestTxn("txn-with-note", "acc-1", "possible match: existing YNAB txn on 2026-06-11")
+		if err := store.InsertTransaction(ctx, in); err != nil {
+			t.Fatalf("InsertTransaction: %v", err)
+		}
+
+		got, err := store.FindTransactionByID(ctx, "txn-with-note")
+		if err != nil {
+			t.Fatalf("FindTransactionByID: %v", err)
+		}
+		if got.MatchNote != in.MatchNote {
+			t.Errorf("expected MatchNote %q, got %q", in.MatchNote, got.MatchNote)
+		}
+	})
+
+	t.Run("without match note", func(t *testing.T) {
+		in := newTestTxn("txn-without-note", "acc-1", "")
+		if err := store.InsertTransaction(ctx, in); err != nil {
+			t.Fatalf("InsertTransaction: %v", err)
+		}
+
+		got, err := store.FindTransactionByID(ctx, "txn-without-note")
+		if err != nil {
+			t.Fatalf("FindTransactionByID: %v", err)
+		}
+		if got.MatchNote != "" {
+			t.Errorf("expected empty MatchNote, got %q", got.MatchNote)
+		}
+	})
+}
+
+func TestMatchNote_RoundTripsThroughFetchAndFind(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	store := NewTransactionStore(db)
+	ctx := context.Background()
+	accID := "acc-match-note"
+
+	// Simulate a pre-existing row that predates the match_note column (NULL).
+	insertTestTxn(t, db, "txn-legacy", accID, "DRAFT")
+
+	withNote := newTestTxn("txn-noted", accID, "possible match: existing YNAB txn on 2026-06-11")
+	if err := store.InsertTransaction(ctx, withNote); err != nil {
+		t.Fatalf("InsertTransaction: %v", err)
+	}
+
+	txns, err := store.FetchTransactionsByAccount(ctx, accID, "", "asc")
+	if err != nil {
+		t.Fatalf("FetchTransactionsByAccount: %v", err)
+	}
+
+	byID := make(map[string]txn.Transaction, len(txns))
+	for _, tx := range txns {
+		byID[tx.ID] = tx
+	}
+
+	if got := byID["txn-legacy"].MatchNote; got != "" {
+		t.Errorf("expected empty MatchNote for NULL legacy row, got %q", got)
+	}
+	if got := byID["txn-noted"].MatchNote; got != withNote.MatchNote {
+		t.Errorf("expected MatchNote %q, got %q", withNote.MatchNote, got)
+	}
+
+	found, err := store.FindTransactionByID(ctx, "txn-legacy")
+	if err != nil {
+		t.Fatalf("FindTransactionByID: %v", err)
+	}
+	if found.MatchNote != "" {
+		t.Errorf("expected empty MatchNote for NULL legacy row via FindTransactionByID, got %q", found.MatchNote)
+	}
 }

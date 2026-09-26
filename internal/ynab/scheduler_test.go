@@ -15,12 +15,14 @@ type mockSyncRunner struct {
 	syncAccountsErr error
 	syncCatsErr     error
 	syncPayeesErr   error
+	syncTxnsErr     error
 
 	syncBudgetsCalls  atomic.Int32
 	fetchBudgetsCalls atomic.Int32
 	syncAccountsCalls atomic.Int32
 	syncCatsCalls     atomic.Int32
 	syncPayeesCalls   atomic.Int32
+	syncTxnsCalls     atomic.Int32
 }
 
 func (m *mockSyncRunner) SyncBudgets(_ context.Context) error {
@@ -48,6 +50,11 @@ func (m *mockSyncRunner) SyncPayees(_ context.Context, _ string) error {
 	return m.syncPayeesErr
 }
 
+func (m *mockSyncRunner) SyncTransactions(_ context.Context, _ string) error {
+	m.syncTxnsCalls.Add(1)
+	return m.syncTxnsErr
+}
+
 func TestSyncAll_HappyPath(t *testing.T) {
 	runner := &mockSyncRunner{
 		budgets: []Budget{{ID: "b1"}, {ID: "b2"}},
@@ -66,6 +73,9 @@ func TestSyncAll_HappyPath(t *testing.T) {
 	}
 	if runner.syncPayeesCalls.Load() != 2 {
 		t.Errorf("SyncPayees called %d times, want 2", runner.syncPayeesCalls.Load())
+	}
+	if runner.syncTxnsCalls.Load() != 2 {
+		t.Errorf("SyncTransactions called %d times, want 2", runner.syncTxnsCalls.Load())
 	}
 }
 
@@ -91,6 +101,7 @@ func TestSyncAll_PerBudgetErrorContinues(t *testing.T) {
 		budgets:         []Budget{{ID: "b1"}, {ID: "b2"}},
 		syncAccountsErr: errors.New("accounts error"),
 		syncCatsErr:     errors.New("categories error"),
+		syncTxnsErr:     errors.New("transactions error"),
 	}
 	s := NewScheduler(runner, time.Hour)
 	s.syncAll(context.Background())
@@ -98,6 +109,10 @@ func TestSyncAll_PerBudgetErrorContinues(t *testing.T) {
 	// SyncPayees must still be called for both budgets despite errors above
 	if runner.syncPayeesCalls.Load() != 2 {
 		t.Errorf("SyncPayees called %d times, want 2", runner.syncPayeesCalls.Load())
+	}
+	// SyncTransactions failing must not block the rest of the loop either
+	if runner.syncTxnsCalls.Load() != 2 {
+		t.Errorf("SyncTransactions called %d times, want 2", runner.syncTxnsCalls.Load())
 	}
 }
 

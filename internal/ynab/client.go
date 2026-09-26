@@ -30,6 +30,7 @@ func NewClient(apiKey, apiURL string, httpClient *http.Client) *Client {
 type SyncReq struct {
 	BudgetID  string
 	LastKnown bool
+	SinceDate string
 }
 
 // BudgetResp is the API response for budgets.
@@ -73,6 +74,17 @@ type PayeeResp struct {
 type PayeeData struct {
 	Payees          []Payee `json:"payees"`
 	ServerKnowledge int64   `json:"server_knowledge"`
+}
+
+// TransactionResp is the API response for transactions.
+type TransactionResp struct {
+	Data TransactionData `json:"data"`
+}
+
+// TransactionData contains the list of transactions.
+type TransactionData struct {
+	Transactions    []BudgetTxn `json:"transactions"`
+	ServerKnowledge int64       `json:"server_knowledge"`
 }
 
 // TxnReq is a request to create a new transaction in YNAB.
@@ -226,6 +238,39 @@ func (c *Client) FetchPayees(syncReq SyncReq) (PayeeData, error) {
 
 	slog.Info("fetched payees", "count", len(payeeResp.Data.Payees))
 	return payeeResp.Data, nil
+}
+
+// FetchTransactions fetches transactions for a budget from the YNAB API,
+// since req.SinceDate.
+func (c *Client) FetchTransactions(req SyncReq) (TransactionData, error) {
+	slog.Info("fetching transactions from YNAB API", "budget_id", req.BudgetID)
+
+	url := fmt.Sprintf("%s/budgets/%s/transactions?since_date=%s", c.apiURL, req.BudgetID, req.SinceDate)
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return TransactionData{}, fmt.Errorf("creating transactions request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return TransactionData{}, fmt.Errorf("fetching transactions: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		slog.Error("YNAB API error fetching transactions", "status_code", resp.StatusCode, "response_body", string(body), "budget_id", req.BudgetID)
+		return TransactionData{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var txnResp TransactionResp
+	if err := json.NewDecoder(resp.Body).Decode(&txnResp); err != nil {
+		return TransactionData{}, fmt.Errorf("decoding transactions response: %w", err)
+	}
+
+	slog.Info("fetched transactions", "count", len(txnResp.Data.Transactions))
+	return txnResp.Data, nil
 }
 
 // Upload uploads a transaction to YNAB.

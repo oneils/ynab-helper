@@ -9,11 +9,12 @@ import (
 // Mock implementations
 
 type mockYnabClient struct {
-	fetchBudgetsFunc    func() ([]Budget, error)
-	fetchAccountsFunc   func(req SyncReq) (AccountData, error)
-	fetchCategoriesFunc func(req SyncReq) (CategoryData, error)
-	fetchPayeesFunc     func(req SyncReq) (PayeeData, error)
-	uploadFunc          func(txn TxnReq) error
+	fetchBudgetsFunc      func() ([]Budget, error)
+	fetchAccountsFunc     func(req SyncReq) (AccountData, error)
+	fetchCategoriesFunc   func(req SyncReq) (CategoryData, error)
+	fetchPayeesFunc       func(req SyncReq) (PayeeData, error)
+	fetchTransactionsFunc func(req SyncReq) (TransactionData, error)
+	uploadFunc            func(txn TxnReq) error
 }
 
 func (m *mockYnabClient) FetchBudgets() ([]Budget, error) {
@@ -42,6 +43,13 @@ func (m *mockYnabClient) FetchPayees(req SyncReq) (PayeeData, error) {
 		return m.fetchPayeesFunc(req)
 	}
 	return PayeeData{}, nil
+}
+
+func (m *mockYnabClient) FetchTransactions(req SyncReq) (TransactionData, error) {
+	if m.fetchTransactionsFunc != nil {
+		return m.fetchTransactionsFunc(req)
+	}
+	return TransactionData{}, nil
 }
 
 func (m *mockYnabClient) Upload(txn TxnReq) error {
@@ -218,6 +226,21 @@ func (m *mockHistoryStore) FindSyncHistoryByBudget(ctx context.Context, budgetID
 	return result, nil
 }
 
+type mockBudgetTxnStore struct {
+	replaceFunc  func(ctx context.Context, budgetID string, sinceDate string, txns []BudgetTxn) error
+	txns         []BudgetTxn
+	replaceCalls []string
+}
+
+func (m *mockBudgetTxnStore) ReplaceBudgetTxns(ctx context.Context, budgetID string, sinceDate string, txns []BudgetTxn) error {
+	m.replaceCalls = append(m.replaceCalls, budgetID+"|"+sinceDate)
+	if m.replaceFunc != nil {
+		return m.replaceFunc(ctx, budgetID, sinceDate, txns)
+	}
+	m.txns = append(m.txns, txns...)
+	return nil
+}
+
 // Tests
 
 func TestSyncer_SyncBudgets(t *testing.T) {
@@ -236,7 +259,7 @@ func TestSyncer_SyncBudgets(t *testing.T) {
 		budgetStore := &mockBudgetStore{}
 		historyStore := &mockHistoryStore{}
 
-		syncer := NewSyncer(client, budgetStore, nil, nil, nil, historyStore)
+		syncer := NewSyncer(client, budgetStore, nil, nil, nil, historyStore, nil)
 
 		err := syncer.SyncBudgets(ctx)
 		if err != nil {
@@ -273,7 +296,7 @@ func TestSyncer_SyncBudgets(t *testing.T) {
 		budgetStore := &mockBudgetStore{}
 		historyStore := &mockHistoryStore{}
 
-		syncer := NewSyncer(client, budgetStore, nil, nil, nil, historyStore)
+		syncer := NewSyncer(client, budgetStore, nil, nil, nil, historyStore, nil)
 
 		err := syncer.SyncBudgets(ctx)
 		if err == nil {
@@ -305,7 +328,7 @@ func TestSyncer_SyncBudgets(t *testing.T) {
 		}
 		historyStore := &mockHistoryStore{}
 
-		syncer := NewSyncer(client, budgetStore, nil, nil, nil, historyStore)
+		syncer := NewSyncer(client, budgetStore, nil, nil, nil, historyStore, nil)
 
 		err := syncer.SyncBudgets(ctx)
 		if err == nil {
@@ -342,7 +365,7 @@ func TestSyncer_SyncAccounts(t *testing.T) {
 		accountStore := &mockAccountStore{}
 		historyStore := &mockHistoryStore{}
 
-		syncer := NewSyncer(client, nil, accountStore, nil, nil, historyStore)
+		syncer := NewSyncer(client, nil, accountStore, nil, nil, historyStore, nil)
 
 		err := syncer.SyncAccounts(ctx, budgetID)
 		if err != nil {
@@ -374,7 +397,7 @@ func TestSyncer_SyncAccounts(t *testing.T) {
 		}
 
 		historyStore := &mockHistoryStore{}
-		syncer := NewSyncer(client, nil, &mockAccountStore{}, nil, nil, historyStore)
+		syncer := NewSyncer(client, nil, &mockAccountStore{}, nil, nil, historyStore, nil)
 
 		err := syncer.SyncAccounts(ctx, budgetID)
 		if err == nil {
@@ -403,7 +426,7 @@ func TestSyncer_SyncCategories(t *testing.T) {
 		categoryStore := &mockCategoryStore{}
 		historyStore := &mockHistoryStore{}
 
-		syncer := NewSyncer(client, nil, nil, categoryStore, nil, historyStore)
+		syncer := NewSyncer(client, nil, nil, categoryStore, nil, historyStore, nil)
 
 		err := syncer.SyncCategories(ctx, budgetID)
 		if err != nil {
@@ -443,7 +466,7 @@ func TestSyncer_SyncPayees(t *testing.T) {
 		payeeStore := &mockPayeeStore{}
 		historyStore := &mockHistoryStore{}
 
-		syncer := NewSyncer(client, nil, nil, nil, payeeStore, historyStore)
+		syncer := NewSyncer(client, nil, nil, nil, payeeStore, historyStore, nil)
 
 		err := syncer.SyncPayees(ctx, budgetID)
 		if err != nil {
@@ -463,6 +486,108 @@ func TestSyncer_SyncPayees(t *testing.T) {
 	})
 }
 
+func TestSyncer_SyncTransactions(t *testing.T) {
+	ctx := context.Background()
+	budgetID := "budget-123"
+
+	t.Run("Successful sync sets BudgetID", func(t *testing.T) {
+		client := &mockYnabClient{
+			fetchTransactionsFunc: func(req SyncReq) (TransactionData, error) {
+				return TransactionData{
+					Transactions: []BudgetTxn{
+						{ID: "t1", AccountID: "acc1", Date: "2026-06-01", Amount: -1000},
+						{ID: "t2", AccountID: "acc2", Date: "2026-06-02", Amount: -2000},
+					},
+					ServerKnowledge: 300,
+				}, nil
+			},
+		}
+
+		budgetTxnStore := &mockBudgetTxnStore{}
+		historyStore := &mockHistoryStore{}
+
+		syncer := NewSyncer(client, nil, nil, nil, nil, historyStore, budgetTxnStore)
+
+		err := syncer.SyncTransactions(ctx, budgetID)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if len(budgetTxnStore.txns) != 2 {
+			t.Fatalf("Expected 2 transactions stored, got %d", len(budgetTxnStore.txns))
+		}
+
+		for _, txn := range budgetTxnStore.txns {
+			if txn.BudgetID != budgetID {
+				t.Errorf("Expected budget ID '%s', got '%s'", budgetID, txn.BudgetID)
+			}
+		}
+
+		if len(historyStore.history) != 1 {
+			t.Fatalf("Expected 1 history entry, got %d", len(historyStore.history))
+		}
+		if historyStore.history[0].Name != "transactions" {
+			t.Errorf("Expected history name 'transactions', got '%s'", historyStore.history[0].Name)
+		}
+	})
+
+	t.Run("Client fetch error", func(t *testing.T) {
+		client := &mockYnabClient{
+			fetchTransactionsFunc: func(req SyncReq) (TransactionData, error) {
+				return TransactionData{}, errors.New("API error")
+			},
+		}
+
+		budgetTxnStore := &mockBudgetTxnStore{}
+		historyStore := &mockHistoryStore{}
+
+		syncer := NewSyncer(client, nil, nil, nil, nil, historyStore, budgetTxnStore)
+
+		err := syncer.SyncTransactions(ctx, budgetID)
+		if err == nil {
+			t.Error("Expected error from failed API call")
+		}
+
+		if len(budgetTxnStore.replaceCalls) != 0 {
+			t.Error("Expected ReplaceBudgetTxns not to be called on fetch failure")
+		}
+
+		if len(historyStore.history) != 1 || historyStore.history[0].Status != "failed" {
+			t.Fatalf("Expected 1 failed history entry, got %+v", historyStore.history)
+		}
+	})
+
+	t.Run("Partial upsert failure", func(t *testing.T) {
+		client := &mockYnabClient{
+			fetchTransactionsFunc: func(req SyncReq) (TransactionData, error) {
+				return TransactionData{
+					Transactions: []BudgetTxn{
+						{ID: "t1", AccountID: "acc1", Date: "2026-06-01", Amount: -1000},
+					},
+				}, nil
+			},
+		}
+
+		budgetTxnStore := &mockBudgetTxnStore{
+			replaceFunc: func(ctx context.Context, budgetID string, sinceDate string, txns []BudgetTxn) error {
+				return errors.New("database error")
+			},
+		}
+		historyStore := &mockHistoryStore{}
+
+		syncer := NewSyncer(client, nil, nil, nil, nil, historyStore, budgetTxnStore)
+
+		err := syncer.SyncTransactions(ctx, budgetID)
+		if err == nil {
+			t.Error("Expected error from failed replace")
+		}
+
+		if len(historyStore.history) != 1 || historyStore.history[0].Status != "failed" {
+			t.Fatalf("Expected 1 failed history entry, got %+v", historyStore.history)
+		}
+	})
+}
+
 func TestSyncer_FetchBudgets(t *testing.T) {
 	ctx := context.Background()
 
@@ -473,7 +598,7 @@ func TestSyncer_FetchBudgets(t *testing.T) {
 		},
 	}
 
-	syncer := NewSyncer(nil, budgetStore, nil, nil, nil, nil)
+	syncer := NewSyncer(nil, budgetStore, nil, nil, nil, nil, nil)
 
 	budgets, err := syncer.FetchBudgets(ctx)
 	if err != nil {
@@ -497,7 +622,7 @@ func TestSyncer_FetchPayeesByBudget(t *testing.T) {
 		},
 	}
 
-	syncer := NewSyncer(nil, nil, nil, nil, payeeStore, nil)
+	syncer := NewSyncer(nil, nil, nil, nil, payeeStore, nil, nil)
 
 	payees, err := syncer.FetchPayeesByBudget(ctx, budgetID)
 	if err != nil {
@@ -520,7 +645,7 @@ func TestSyncHistory_SaveFailure(t *testing.T) {
 	}
 
 	historyStore := &mockHistoryStore{}
-	syncer := NewSyncer(client, nil, nil, nil, nil, historyStore)
+	syncer := NewSyncer(client, nil, nil, nil, nil, historyStore, nil)
 
 	// Trigger a failure
 	err := syncer.SyncBudgets(ctx)
@@ -548,8 +673,9 @@ func TestNewSyncer(t *testing.T) {
 	categoryStore := &mockCategoryStore{}
 	payeeStore := &mockPayeeStore{}
 	historyStore := &mockHistoryStore{}
+	budgetTxnStore := &mockBudgetTxnStore{}
 
-	syncer := NewSyncer(client, budgetStore, accountStore, categoryStore, payeeStore, historyStore)
+	syncer := NewSyncer(client, budgetStore, accountStore, categoryStore, payeeStore, historyStore, budgetTxnStore)
 
 	if syncer == nil {
 		t.Fatal("Expected non-nil syncer")
@@ -571,5 +697,8 @@ func TestNewSyncer(t *testing.T) {
 	}
 	if syncer.historyStore == nil {
 		t.Error("Expected historyStore to be set")
+	}
+	if syncer.budgetTxnStore == nil {
+		t.Error("Expected budgetTxnStore to be set")
 	}
 }

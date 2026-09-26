@@ -31,8 +31,8 @@ func (s *TransactionStore) InsertTransaction(ctx context.Context, t txn.Transact
 		INSERT OR IGNORE INTO transactions (
 			id, amount, currency, description, payee,
 			account_id, account_name, status, created_at, txn_time,
-			raw_text, raw_line_number, error_msg
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			raw_text, raw_line_number, error_msg, match_note
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := s.db.ExecContext(ctx, query,
@@ -49,6 +49,7 @@ func (s *TransactionStore) InsertTransaction(ctx context.Context, t txn.Transact
 		t.RawText,
 		t.RawLineNumber,
 		t.ErrorMsg,
+		t.MatchNote,
 	)
 	if err != nil {
 		return fmt.Errorf("insert transaction: %w", err)
@@ -74,7 +75,7 @@ func (s *TransactionStore) FetchTransactionsByAccount(ctx context.Context, accID
 	query := `
 		SELECT id, amount, currency, description, payee,
 		       account_id, account_name, status, created_at, txn_time,
-		       raw_text, raw_line_number, error_msg
+		       raw_text, raw_line_number, error_msg, match_note
 		FROM transactions
 	`
 	args := []interface{}{}
@@ -118,6 +119,7 @@ func (s *TransactionStore) FetchTransactionsByAccount(ctx context.Context, accID
 	for rows.Next() {
 		var t txn.Transaction
 		var createdAt, txnTime string
+		var matchNote sql.NullString
 
 		err := rows.Scan(
 			&t.ID,
@@ -133,10 +135,12 @@ func (s *TransactionStore) FetchTransactionsByAccount(ctx context.Context, accID
 			&t.RawText,
 			&t.RawLineNumber,
 			&t.ErrorMsg,
+			&matchNote,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan transaction: %w", err)
 		}
+		t.MatchNote = matchNote.String
 
 		// Parse timestamps
 		t.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
@@ -167,13 +171,14 @@ func (s *TransactionStore) FindTransactionByID(ctx context.Context, id string) (
 	query := `
 		SELECT id, amount, currency, description, payee,
 		       account_id, account_name, status, created_at, txn_time,
-		       raw_text, raw_line_number, error_msg
+		       raw_text, raw_line_number, error_msg, match_note
 		FROM transactions
 		WHERE id = ?
 	`
 
 	var t txn.Transaction
 	var createdAt, txnTime string
+	var matchNote sql.NullString
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&t.ID,
@@ -189,6 +194,7 @@ func (s *TransactionStore) FindTransactionByID(ctx context.Context, id string) (
 		&t.RawText,
 		&t.RawLineNumber,
 		&t.ErrorMsg,
+		&matchNote,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -196,6 +202,7 @@ func (s *TransactionStore) FindTransactionByID(ctx context.Context, id string) (
 		}
 		return txn.Transaction{}, fmt.Errorf("find transaction: %w", err)
 	}
+	t.MatchNote = matchNote.String
 
 	// Parse timestamps
 	t.CreatedAt, err = time.Parse(time.RFC3339, createdAt)

@@ -852,6 +852,144 @@ func (s *YnabStore) UpdatePayeeLastCategory(ctx context.Context, payeeID, catego
 	return nil
 }
 
+// --- Budget transaction operations ---
+
+// ReplaceBudgetTxns atomically replaces all cached YNAB transactions for a
+// budget on or after sinceDate with the given set, so a failure partway
+// through leaves the previous cache intact instead of losing rows.
+//
+// Rows before sinceDate are never touched. This is deliberate: budget_transactions
+// is kept as a historical record rather than a disposable cache, so once a
+// transaction ages past the caller's sync window it's frozen at its last known
+// state instead of being purged. Accepted trade-off: if a transaction is edited or
+// deleted in YNAB after it has aged out of the window, this table won't reflect
+// that change, and a CSV row could still be matched/skipped against the stale
+// data. See docs/plans/completed/20260926-exclude-manual-ynab-transactions.md.
+func (s *YnabStore) ReplaceBudgetTxns(ctx context.Context, budgetID string, sinceDate string, txns []ynab.BudgetTxn) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if _, err := tx.ExecContext(ctx, "DELETE FROM budget_transactions WHERE budget_id = ? AND date >= ?", budgetID, sinceDate); err != nil {
+		return fmt.Errorf("delete budget txns since: %w", err)
+	}
+
+	query := `
+		INSERT OR REPLACE INTO budget_transactions (
+			id, budget_id, account_id, account_name, date, amount, memo,
+			cleared, approved, flag_color, payee_id, payee_name,
+			category_id, category_name, transfer_account_id,
+			transfer_transaction_id, matched_transaction_id, import_id, deleted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	subQuery := `
+		INSERT INTO budget_subtransactions (
+			id, transaction_id, amount, memo, payee_id, payee_name,
+			category_id, category_name, transfer_account_id, deleted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	for _, t := range txns {
+		if _, err := tx.ExecContext(ctx, query,
+			t.ID, t.BudgetID, t.AccountID, t.AccountName, t.Date, t.Amount, t.Memo,
+			t.Cleared, boolToInt(t.Approved), t.FlagColor, t.PayeeID, t.PayeeName,
+			t.CategoryID, t.CategoryName, t.TransferAccountID,
+			t.TransferTransactionID, t.MatchedTransactionID, t.ImportID, boolToInt(t.Deleted),
+		); err != nil {
+			return fmt.Errorf("upsert budget txn %s: %w", t.ID, err)
+		}
+
+		// Replace this transaction's splits wholesale - simpler and more
+		// explicit than relying on ON DELETE CASCADE firing as a side effect
+		// of the INSERT OR REPLACE conflict resolution above.
+		if _, err := tx.ExecContext(ctx, "DELETE FROM budget_subtransactions WHERE transaction_id = ?", t.ID); err != nil {
+			return fmt.Errorf("delete stale subtransactions for %s: %w", t.ID, err)
+		}
+		for _, sub := range t.Subtransactions {
+			if _, err := tx.ExecContext(ctx, subQuery,
+				sub.ID, t.ID, sub.Amount, sub.Memo, sub.PayeeID, sub.PayeeName,
+				sub.CategoryID, sub.CategoryName, sub.TransferAccountID, boolToInt(sub.Deleted),
+			); err != nil {
+				return fmt.Errorf("insert subtransaction %s for %s: %w", sub.ID, t.ID, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	slog.Debug("Replaced budget txns", "budget_id", budgetID, "count", len(txns))
+	return nil
+}
+
+// FindBudgetTxnMatch finds the closest cached YNAB transaction matching the given
+// account, amount, and a ±3-day date window, returning (BudgetTxn{}, false, nil)
+// when no match is found.
+func (s *YnabStore) FindBudgetTxnMatch(ctx context.Context, accountID string, amountMilliunits int, date time.Time) (ynab.BudgetTxn, bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	const dateLayout = "2006-01-02"
+
+	dateStr := date.Format(dateLayout)
+	fromDate := date.AddDate(0, 0, -3).Format(dateLayout)
+	toDate := date.AddDate(0, 0, 3).Format(dateLayout)
+
+	// Splits aren't loaded here - matching only needs the parent row, and
+	// no caller of FindBudgetTxnMatch currently uses subtransaction data.
+	query := `
+		SELECT id, budget_id, account_id, account_name, date, amount, memo,
+		       cleared, approved, flag_color, payee_id, payee_name,
+		       category_id, category_name, transfer_account_id,
+		       transfer_transaction_id, matched_transaction_id, import_id, deleted
+		FROM budget_transactions
+		WHERE account_id = ? AND amount = ? AND date BETWEEN ? AND ?
+		ORDER BY ABS(julianday(date) - julianday(?))
+		LIMIT 1
+	`
+
+	row := s.db.QueryRowContext(ctx, query, accountID, amountMilliunits, fromDate, toDate, dateStr)
+
+	var t ynab.BudgetTxn
+	var accountName, memo, cleared, flagColor, payeeID, payeeName sql.NullString
+	var categoryID, categoryName, transferAccountID, transferTransactionID sql.NullString
+	var matchedTransactionID, importID sql.NullString
+	var approved, deleted int
+	err := row.Scan(
+		&t.ID, &t.BudgetID, &t.AccountID, &accountName, &t.Date, &t.Amount, &memo,
+		&cleared, &approved, &flagColor, &payeeID, &payeeName,
+		&categoryID, &categoryName, &transferAccountID,
+		&transferTransactionID, &matchedTransactionID, &importID, &deleted,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ynab.BudgetTxn{}, false, nil
+		}
+		return ynab.BudgetTxn{}, false, fmt.Errorf("find budget txn match: %w", err)
+	}
+	t.AccountName = accountName.String
+	t.Memo = memo.String
+	t.Cleared = cleared.String
+	t.Approved = intToBool(approved)
+	t.FlagColor = flagColor.String
+	t.PayeeID = payeeID.String
+	t.PayeeName = payeeName.String
+	t.CategoryID = categoryID.String
+	t.CategoryName = categoryName.String
+	t.TransferAccountID = transferAccountID.String
+	t.TransferTransactionID = transferTransactionID.String
+	t.MatchedTransactionID = matchedTransactionID.String
+	t.ImportID = importID.String
+	t.Deleted = intToBool(deleted)
+
+	return t, true, nil
+}
+
 // --- Sync History operations ---
 
 // UpsertSyncHistory inserts or updates a sync history record.

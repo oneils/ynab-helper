@@ -995,7 +995,7 @@ func TestSaveParserMappingHandler_SetsShowToastTrigger(t *testing.T) {
 
 	s := &Server{
 		DB:           db,
-		TxnProcessor: txn.NewProcessor(nil, nil, nil, nil, nil, nil),
+		TxnProcessor: txn.NewProcessor(nil, nil, nil, nil, nil, nil, nil),
 	}
 
 	form := url.Values{"parser_name": {""}}
@@ -1026,6 +1026,9 @@ func (fakeYnabClient) FetchCategories(ynab.SyncReq) (ynab.CategoryData, error) {
 }
 func (fakeYnabClient) FetchPayees(ynab.SyncReq) (ynab.PayeeData, error) {
 	return ynab.PayeeData{}, nil
+}
+func (fakeYnabClient) FetchTransactions(ynab.SyncReq) (ynab.TransactionData, error) {
+	return ynab.TransactionData{}, nil
 }
 func (fakeYnabClient) Upload(ynab.TxnReq) error { return nil }
 
@@ -1059,7 +1062,7 @@ func TestSyncBudgetsHandler_SetsHXRefresh(t *testing.T) {
 	}
 
 	s := &Server{
-		Syncer:        ynab.NewSyncer(fakeYnabClient{}, fakeBudgetStorer{}, nil, nil, nil, fakeHistoryStorer{}),
+		Syncer:        ynab.NewSyncer(fakeYnabClient{}, fakeBudgetStorer{}, nil, nil, nil, fakeHistoryStorer{}, nil),
 		TemplateCache: cache,
 	}
 
@@ -1378,8 +1381,8 @@ func newUploadTestServer(uploadErr error) (*Server, *fakeUploadPatternStore) {
 			{ID: "txn1", Description: "LIDL WARSZAWA", Account: txn.BankAccount{ID: "acc1"}},
 		},
 	}
-	processor := txn.NewProcessor(nil, txnStore, fakeBudgetFinder{}, &fakeUploader{err: uploadErr}, suggestionEngine, nil)
-	syncer := ynab.NewSyncer(nil, fakeUploadBudgetStorer{}, nil, fakeCategoryStorer{}, fakePayeeStorer{}, nil)
+	processor := txn.NewProcessor(nil, txnStore, fakeBudgetFinder{}, &fakeUploader{err: uploadErr}, suggestionEngine, nil, nil)
+	syncer := ynab.NewSyncer(nil, fakeUploadBudgetStorer{}, nil, fakeCategoryStorer{}, fakePayeeStorer{}, nil, nil)
 
 	s := &Server{
 		Syncer:       syncer,
@@ -1481,8 +1484,8 @@ func newDetailTestServer(t *testing.T, descriptionPatterns []txn.PayeePattern) *
 			{ID: "txn1", Description: "Purchase at UNMATCHED MERCHANT", Account: txn.BankAccount{ID: "acc1"}},
 		},
 	}
-	processor := txn.NewProcessor(nil, txnStore, fakeBudgetFinder{}, nil, suggestionEngine, nil)
-	syncer := ynab.NewSyncer(nil, fakeUploadBudgetStorer{}, nil, fakeCategoryStorer{}, fakePayeeStorer{}, nil)
+	processor := txn.NewProcessor(nil, txnStore, fakeBudgetFinder{}, nil, suggestionEngine, nil, nil)
+	syncer := ynab.NewSyncer(nil, fakeUploadBudgetStorer{}, nil, fakeCategoryStorer{}, fakePayeeStorer{}, nil, nil)
 
 	return &Server{
 		Syncer:        syncer,

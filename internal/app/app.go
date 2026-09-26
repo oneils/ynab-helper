@@ -63,7 +63,7 @@ func New(cfg Config) (*App, error) {
 	txnStore := db.TransactionStore()
 	patternStore := db.PatternStore()
 
-	syncer := ynab.NewSyncer(ynabClient, ynabStore, ynabStore, ynabStore, ynabStore, ynabStore)
+	syncer := ynab.NewSyncer(ynabClient, ynabStore, ynabStore, ynabStore, ynabStore, ynabStore, ynabStore)
 
 	timeProvider := parser.RealTimeProvider{}
 	parsers := map[string]txn.ReportParser{
@@ -76,7 +76,7 @@ func New(cfg Config) (*App, error) {
 
 	// Wire smart suggestions
 	suggestionEngine := txn.NewSuggestionEngine(patternStore)
-	txnProcessor := txn.NewProcessor(parsers, txnStore, ynabStore, ynabClient, suggestionEngine, db.ParserMappingStore())
+	txnProcessor := txn.NewProcessor(parsers, txnStore, ynabStore, ynabClient, suggestionEngine, db.ParserMappingStore(), ynabStore)
 
 	templateCache, err := server.NewTemplateCache(cfg.MockYnab)
 	if err != nil {

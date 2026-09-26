@@ -58,6 +58,17 @@ func (c *FakeClient) FetchPayees(req SyncReq) (PayeeData, error) {
 	return c.fixture.Payees[req.BudgetID], nil
 }
 
+// FetchTransactions returns the fixture's transactions for req.BudgetID.
+func (c *FakeClient) FetchTransactions(req SyncReq) (TransactionData, error) {
+	slog.Info("fetching transactions from mock YNAB client", "budget_id", req.BudgetID)
+
+	if _, ok := findBudget(c.fixture.Budgets, req.BudgetID); !ok {
+		return TransactionData{}, fmt.Errorf("mock: unknown budget id %q", req.BudgetID)
+	}
+
+	return c.fixture.Transactions[req.BudgetID], nil
+}
+
 // Upload logs the transaction and always succeeds (no-op).
 func (c *FakeClient) Upload(txn TxnReq) error {
 	slog.Info("mock uploading transaction", "budget_id", txn.BudgetID, "account_id", txn.AccountID, "amount", txn.Amount)

@@ -43,34 +43,46 @@ type HistoryStorer interface {
 	FindSyncHistoryByBudget(ctx context.Context, budgetID string) ([]SyncHistory, error)
 }
 
+// BudgetTxnStorer defines storage operations for cached YNAB transactions.
+type BudgetTxnStorer interface {
+	ReplaceBudgetTxns(ctx context.Context, budgetID string, sinceDate string, txns []BudgetTxn) error
+}
+
 // YnabClient defines YNAB API operations.
 type YnabClient interface {
 	FetchBudgets() ([]Budget, error)
 	FetchAccounts(req SyncReq) (AccountData, error)
 	FetchCategories(req SyncReq) (CategoryData, error)
 	FetchPayees(req SyncReq) (PayeeData, error)
+	FetchTransactions(req SyncReq) (TransactionData, error)
 	Upload(txn TxnReq) error
 }
 
+// transactionSyncWindow is how far back SyncTransactions fetches YNAB
+// transactions on each run, hardcoded per the plan (no config flag).
+const transactionSyncWindow = 6 * 30 * 24 * time.Hour
+
 // Syncer handles all YNAB sync operations.
 type Syncer struct {
-	client        YnabClient
-	budgetStore   BudgetStorer
-	accountStore  AccountStorer
-	categoryStore CategoryStorer
-	payeeStore    PayeeStorer
-	historyStore  HistoryStorer
+	client         YnabClient
+	budgetStore    BudgetStorer
+	accountStore   AccountStorer
+	categoryStore  CategoryStorer
+	payeeStore     PayeeStorer
+	historyStore   HistoryStorer
+	budgetTxnStore BudgetTxnStorer
 }
 
 // NewSyncer creates a new Syncer.
-func NewSyncer(client YnabClient, budgetStore BudgetStorer, accountStore AccountStorer, categoryStore CategoryStorer, payeeStore PayeeStorer, historyStore HistoryStorer) *Syncer {
+func NewSyncer(client YnabClient, budgetStore BudgetStorer, accountStore AccountStorer, categoryStore CategoryStorer, payeeStore PayeeStorer, historyStore HistoryStorer, budgetTxnStore BudgetTxnStorer) *Syncer {
 	return &Syncer{
-		client:        client,
-		budgetStore:   budgetStore,
-		accountStore:  accountStore,
-		categoryStore: categoryStore,
-		payeeStore:    payeeStore,
-		historyStore:  historyStore,
+		client:         client,
+		budgetStore:    budgetStore,
+		accountStore:   accountStore,
+		categoryStore:  categoryStore,
+		payeeStore:     payeeStore,
+		historyStore:   historyStore,
+		budgetTxnStore: budgetTxnStore,
 	}
 }
 
@@ -197,6 +209,37 @@ func (s *Syncer) SyncPayees(ctx context.Context, budgetID string) error {
 		Status:           "success",
 		UpdatedAt:        time.Now(),
 		AddedItems:       len(data.Payees),
+		LastKnownVersion: data.ServerKnowledge,
+		BudgetID:         budgetID,
+	})
+}
+
+// SyncTransactions syncs a budget's real YNAB transactions into the local cache.
+func (s *Syncer) SyncTransactions(ctx context.Context, budgetID string) error {
+	sinceDate := time.Now().Add(-transactionSyncWindow).Format("2006-01-02")
+
+	data, err := s.client.FetchTransactions(SyncReq{BudgetID: budgetID, SinceDate: sinceDate})
+	if err != nil {
+		s.saveFailedHistory(ctx, "transactions", budgetID, err)
+		return fmt.Errorf("fetching transactions: %w", err)
+	}
+
+	for i := range data.Transactions {
+		data.Transactions[i].BudgetID = budgetID
+	}
+
+	if err := s.budgetTxnStore.ReplaceBudgetTxns(ctx, budgetID, sinceDate, data.Transactions); err != nil {
+		err = fmt.Errorf("replacing cached transactions: %w", err)
+		s.saveFailedHistory(ctx, "transactions", budgetID, err)
+		return err
+	}
+
+	slog.Info("synced transactions", "count", len(data.Transactions), "budget_id", budgetID)
+	return s.historyStore.UpsertSyncHistory(ctx, SyncHistory{
+		Name:             "transactions",
+		Status:           "success",
+		UpdatedAt:        time.Now(),
+		AddedItems:       len(data.Transactions),
 		LastKnownVersion: data.ServerKnowledge,
 		BudgetID:         budgetID,
 	})

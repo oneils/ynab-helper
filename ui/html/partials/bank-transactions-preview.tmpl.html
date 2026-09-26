@@ -54,6 +54,12 @@
             <div class="stat-label">Errors</div>
         </div>
         {{end}}
+        {{if gt .Preview.AlreadyInYnabCount 0}}
+        <div class="stat-card stat-already-in-ynab">
+            <div class="stat-value">{{.Preview.AlreadyInYnabCount}}</div>
+            <div class="stat-label">Already in YNAB</div>
+        </div>
+        {{end}}
     </div>
 
     <!-- Sample Transactions -->
@@ -77,7 +83,7 @@
             </thead>
             <tbody>
                 {{range .Preview.Transactions}}
-                <tr class="{{if .ErrorMsg}}preview-row-error{{else if eq .Status "DUPLICATE"}}preview-row-duplicate{{else}}preview-row-new{{end}}">
+                <tr class="{{if .ErrorMsg}}preview-row-error{{else if eq .Status "DUPLICATE"}}preview-row-duplicate{{else if eq .Status "ALREADY_IN_YNAB"}}preview-row-already-in-ynab{{else}}preview-row-new{{end}}">
                     <td>{{.TxnTime.Format "2006-01-02"}}</td>
                     <td>{{.Payee}}</td>
                     <td>{{.Amount}}</td>
@@ -88,6 +94,8 @@
                             <span class="badge badge-error">Error</span>
                         {{else if eq .Status "DUPLICATE"}}
                             <span class="badge badge-warning">Duplicate</span>
+                        {{else if eq .Status "ALREADY_IN_YNAB"}}
+                            <span class="badge badge-neutral">Already in YNAB</span>
                         {{else}}
                             <span class="badge badge-success">New</span>
                         {{end}}
@@ -112,7 +120,7 @@
     {{end}}
 
     <!-- No New Transactions Message -->
-    {{if eq .Preview.NewCount 0}}
+    {{if eq .Preview.ImportableCount 0}}
     <div class="preview-info-message">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -121,14 +129,14 @@
         </svg>
         <div>
             <strong>No new transactions to import</strong>
-            <p>All transactions in this file have already been imported.</p>
+            <p>All transactions in this file are either already imported or already exist in YNAB.</p>
         </div>
     </div>
     {{end}}
 
     <!-- Action Buttons -->
-    <div class="preview-actions {{if eq .Preview.NewCount 0}}preview-actions-single{{end}}">
-        {{if gt .Preview.NewCount 0}}
+    <div class="preview-actions {{if eq .Preview.ImportableCount 0}}preview-actions-single{{end}}">
+        {{if gt .Preview.ImportableCount 0}}
         <form
             hx-post="/confirm-bank-txns"
             hx-target="#transactions"
@@ -142,7 +150,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                Confirm Import ({{.Preview.NewCount}} transactions)
+                Confirm Import ({{.Preview.ImportableCount}} transactions)
             </button>
         </form>
         {{end}}

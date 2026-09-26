@@ -44,6 +44,7 @@ type Transaction struct {
 	RawText       string            `json:"rawText" bson:"rawText"`
 	RawLineNumber int               `json:"raw_line_number" bson:"raw_line_number"`
 	ErrorMsg      string            `json:"errorMsg" bson:"error_msg"`
+	MatchNote     string            `json:"matchNote" bson:"match_note"`
 }
 
 // BankAccount represents the bank account a transaction belongs to.

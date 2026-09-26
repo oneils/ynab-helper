@@ -13,6 +13,7 @@ type BudgetSyncRunner interface {
 	SyncAccounts(ctx context.Context, budgetID string) error
 	SyncCategories(ctx context.Context, budgetID string) error
 	SyncPayees(ctx context.Context, budgetID string) error
+	SyncTransactions(ctx context.Context, budgetID string) error
 }
 
 // Scheduler runs a full YNAB sync on startup and then on a fixed interval.
@@ -67,6 +68,9 @@ func (s *Scheduler) syncAll(ctx context.Context) {
 		}
 		if err := s.runner.SyncPayees(ctx, b.ID); err != nil {
 			slog.Error("background sync: SyncPayees failed", "budget_id", b.ID, "error", err)
+		}
+		if err := s.runner.SyncTransactions(ctx, b.ID); err != nil {
+			slog.Error("background sync: SyncTransactions failed", "budget_id", b.ID, "error", err)
 		}
 	}
 

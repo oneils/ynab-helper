@@ -23,6 +23,9 @@ func testFixture() Fixture {
 		Payees: map[string]PayeeData{
 			"budget-1": {Payees: []Payee{{ID: "payee-1", Name: "Local Grocer"}}},
 		},
+		Transactions: map[string]TransactionData{
+			"budget-1": {Transactions: []BudgetTxn{{ID: "txn-1", AccountID: "acc-1"}}},
+		},
 	}
 }
 
@@ -122,6 +125,39 @@ func TestFakeClient_FetchPayees_KnownBudgetNoData(t *testing.T) {
 	}
 	if len(data.Payees) != 0 {
 		t.Fatalf("expected empty payees, got %+v", data.Payees)
+	}
+}
+
+func TestFakeClient_FetchTransactions(t *testing.T) {
+	client := NewFakeClient(testFixture())
+
+	data, err := client.FetchTransactions(SyncReq{BudgetID: "budget-1"})
+	if err != nil {
+		t.Fatalf("FetchTransactions returned error: %v", err)
+	}
+	if len(data.Transactions) != 1 || data.Transactions[0].ID != "txn-1" {
+		t.Fatalf("expected fixture transactions, got %+v", data.Transactions)
+	}
+}
+
+func TestFakeClient_FetchTransactions_UnknownBudget(t *testing.T) {
+	client := NewFakeClient(testFixture())
+
+	_, err := client.FetchTransactions(SyncReq{BudgetID: "unknown"})
+	if err == nil {
+		t.Fatal("expected error for unknown budget id, got nil")
+	}
+}
+
+func TestFakeClient_FetchTransactions_KnownBudgetNoData(t *testing.T) {
+	client := NewFakeClient(testFixture())
+
+	data, err := client.FetchTransactions(SyncReq{BudgetID: "budget-no-data"})
+	if err != nil {
+		t.Fatalf("FetchTransactions returned error: %v", err)
+	}
+	if len(data.Transactions) != 0 {
+		t.Fatalf("expected empty transactions, got %+v", data.Transactions)
 	}
 }
 

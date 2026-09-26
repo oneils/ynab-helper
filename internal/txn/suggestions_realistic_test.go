@@ -82,7 +82,7 @@ func TestRealistic_CardNumberVariantsOfSameMerchant_MatchAsSamePattern(t *testin
 				BudgetID: "budget1", PayeeID: "lidl-payee", PayeeName: "Lidl",
 				CategoryID: "groceries", CategoryName: "Groceries",
 				NormalizedDescription: Fingerprint("PAYMENT CARD 1234 LIDL WARSZAWA"),
-				OccurrenceCount:        8, LastSeen: recent,
+				OccurrenceCount:       8, LastSeen: recent,
 			},
 		},
 	}
@@ -109,13 +109,13 @@ func TestRealistic_CompetingCategoriesForSamePayee_DescriptionHintPicksCorrectOn
 				BudgetID: "budget1", PayeeID: "amazon-payee", PayeeName: "Amazon",
 				CategoryID: "groceries", CategoryName: "Groceries",
 				NormalizedDescription: Fingerprint("AMAZON FRESH GROCERY DELIVERY"),
-				OccurrenceCount:        4, LastSeen: recent,
+				OccurrenceCount:       4, LastSeen: recent,
 			},
 			{
 				BudgetID: "budget1", PayeeID: "amazon-payee", PayeeName: "Amazon",
 				CategoryID: "electronics", CategoryName: "Electronics",
 				NormalizedDescription: Fingerprint("AMAZON ELECTRONICS ORDER"),
-				OccurrenceCount:        4, LastSeen: recent,
+				OccurrenceCount:       4, LastSeen: recent,
 			},
 		},
 	}
@@ -141,7 +141,7 @@ func TestRealistic_BelowSuggestThresholdPattern_NeverSurfaces(t *testing.T) {
 				BudgetID: "budget1", PayeeID: "obscure-payee", PayeeName: "Obscure Shop",
 				CategoryID: "misc", CategoryName: "Misc",
 				NormalizedDescription: Fingerprint("SOME OBSCURE SHOP PURCHASE"),
-				OccurrenceCount:        1, LastSeen: old,
+				OccurrenceCount:       1, LastSeen: old,
 			},
 		},
 	}
@@ -178,7 +178,7 @@ func TestRealistic_CorrectedPattern_OldCategoryNoLongerAppearsAfterConflict(t *t
 				BudgetID: "budget1", PayeeID: "starbucks-payee", PayeeName: "Starbucks",
 				CategoryID: "dining", CategoryName: "Dining Out",
 				NormalizedDescription: Fingerprint("STARBUCKS COFFEE PURCHASE"),
-				OccurrenceCount:        6, LastSeen: recent,
+				OccurrenceCount:       6, LastSeen: recent,
 			},
 		},
 	}
@@ -201,7 +201,7 @@ func TestRealistic_CorrectedPattern_OldCategoryNoLongerAppearsAfterConflict(t *t
 		BudgetID: "budget1", PayeeID: "starbucks-payee", PayeeName: "Starbucks",
 		CategoryID: "business-expense", CategoryName: "Business Expense",
 		NormalizedDescription: fp,
-		OccurrenceCount:        1, LastSeen: recent,
+		OccurrenceCount:       1, LastSeen: recent,
 	}); err != nil {
 		t.Fatalf("unexpected error recording corrected pattern: %v", err)
 	}

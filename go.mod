@@ -7,7 +7,7 @@ require (
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/pressly/goose/v3 v3.28.0
 	golang.org/x/text v0.43.0
-	modernc.org/sqlite v1.58.0
+	modernc.org/sqlite v1.60.1
 )
 
 require (
@@ -20,8 +20,8 @@ require (
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	modernc.org/libc v1.75.6 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )

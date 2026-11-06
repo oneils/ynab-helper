@@ -85,6 +85,8 @@ jobs:
 
   docker-merge:
     needs: docker
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -143,3 +145,32 @@ jobs:
           fi
           docker buildx imagetools create ${tags} \
             $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+      - name: manifest digest
+        id: digest
+        run: |
+          ref="${{ steps.tags.outputs.ref }}"
+          digest=$(docker buildx imagetools inspect "ghcr.io/${{ github.repository }}:${ref}" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ "$digest" == sha256:* ]] || { echo "no digest for ghcr.io/${{ github.repository }}:${ref}" >&2; exit 1; }
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Image"
+            echo
+            echo "digest: \`${digest}\`"
+            echo
+            echo "deploy:"
+            echo '```'
+            echo "gh workflow run deploy -R $GITHUB_REPOSITORY -f image=${digest}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: docker-merge
+    # release tags deploy (like eve-trade-manager); any other image: run the deploy workflow by hand
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      image: ${{ needs.docker-merge.outputs.digest }}
+    secrets: inherit

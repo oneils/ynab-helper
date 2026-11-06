@@ -1,0 +1,94 @@
+name: deploy
+
+# GitOps deploy: the image reference (pinned by digest) is committed to oneils/local-infra
+# (k3s/ynab-helper/ynab-helper-deployment.yaml) and Flux in the cluster applies it within its 10m interval.
+# Runs on a GitHub-hosted runner: it needs no access to the cluster.
+# Rollback: revert the deploy commit in local-infra.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "image digest (sha256:...), tag (1.2.3, latest) or full image reference"
+        required: true
+  workflow_call:
+    inputs:
+      image:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  APP: ynab-helper
+  MANIFEST: k3s/ynab-helper/ynab-helper-deployment.yaml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # LOCAL_INFRA_TOKEN is an environment secret
+    environment: production
+    env:
+      INPUT_IMAGE: ${{ inputs.image }}
+    steps:
+      - name: resolve image (a tag is pinned to its current digest)
+        id: image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          name="${GITHUB_REPOSITORY,,}"
+          case "$INPUT_IMAGE" in
+            sha256:*) image="ghcr.io/$name@$INPUT_IMAGE" ;;
+            */*@sha256:*) image="$INPUT_IMAGE" ;;
+            *)
+              tag="${INPUT_IMAGE##*:}"
+              token=$(curl -fsS -u "${GITHUB_ACTOR}:${GH_TOKEN}" "https://ghcr.io/token?scope=repository:${name}:pull" | jq -r .token)
+              digest=$(curl -fsSI -H "Authorization: Bearer $token" \
+                -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
+                "https://ghcr.io/v2/${name}/manifests/${tag}" | tr -d '\r' | awk 'tolower($1)=="docker-content-digest:" {print $2}')
+              [ -n "$digest" ] || { echo "tag $tag not found in ghcr.io/$name"; exit 1; }
+              image="ghcr.io/$name:$tag@$digest" ;;
+          esac
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "deploying $image" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: oneils/local-infra
+          token: ${{ secrets.LOCAL_INFRA_TOKEN }}
+          path: local-infra
+
+      - name: commit image to local-infra
+        working-directory: local-infra
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin main
+            sed -E -i "s#^([[:space:]]*image: )ghcr\.io/oneils/${APP}[@:].*#\1${IMAGE}#" "$MANIFEST"
+            if git diff --quiet; then
+              echo "image already in git, nothing to commit" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ "$(git diff --numstat | awk '{s+=$1} END {print s}')" != "1" ]; then
+              git diff; echo "expected exactly one changed line"; exit 1
+            fi
+            git commit -qam "deploy(${APP}): ${IMAGE##*@}" -m "from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}, run ${GITHUB_RUN_ID}"
+            if git push -q origin HEAD:main; then
+              echo "committed to local-infra: $(git rev-parse --short HEAD); Flux applies it within 10m" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            git reset -q --hard origin/main
+            sleep $((attempt * 5))
+          done
+          echo "push to local-infra failed"; exit 1
